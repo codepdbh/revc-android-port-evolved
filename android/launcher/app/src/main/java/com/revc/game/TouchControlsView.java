@@ -57,6 +57,7 @@ public class TouchControlsView extends View {
     private static final int CONTEXT_MENU = 0;
     private static final int CONTEXT_ON_FOOT = 1;
     private static final int CONTEXT_VEHICLE = 2;
+    private static final int CONTEXT_CUTSCENE = 3;
 
     private final Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -114,6 +115,7 @@ public class TouchControlsView extends View {
 
     private int width, height;
     private int currentContext = CONTEXT_ON_FOOT;
+    private float baseLabelSize;
 
     private final Handler contextPoller = new Handler(Looper.getMainLooper());
     private final Runnable pollContext = new Runnable() {
@@ -189,7 +191,8 @@ public class TouchControlsView extends View {
         rightStick.center.set(width - margin - baseRadius, height - margin - baseRadius);
         rightStick.knob.set(rightStick.center.x, rightStick.center.y);
 
-        labelPaint.setTextSize(baseRadius * 0.3f);
+        baseLabelSize = baseRadius * 0.3f;
+        labelPaint.setTextSize(baseLabelSize);
 
         for (Button btn : buttons) {
             btn.visible = false;
@@ -203,11 +206,25 @@ public class TouchControlsView extends View {
             case CONTEXT_VEHICLE:
                 layoutVehicle(margin, baseRadius);
                 break;
+            case CONTEXT_CUTSCENE:
+                layoutCutscene();
+                break;
             case CONTEXT_ON_FOOT:
             default:
                 layoutOnFoot(margin, baseRadius);
                 break;
         }
+    }
+
+    /** Cutscenes take control away entirely -- just one big, unmistakable skip button. */
+    private void layoutCutscene() {
+        leftStick.visible = false;
+        rightStick.visible = false;
+
+        float w = width * 0.32f;
+        float h = height * 0.14f;
+        placeRect(BTN_CROSS, width - w - width * 0.04f, height - h - height * 0.05f, width - width * 0.04f, height - height * 0.05f);
+        b(BTN_CROSS).label = "SALTAR\nESCENA";
     }
 
     /** Frontend menus are D-Pad + confirm/cancel + Start driven -- no mouse, no sticks. */
@@ -256,13 +273,16 @@ public class TouchControlsView extends View {
         placeCircle(BTN_SQUARE, faceCx - spread, faceCy, btnR);
         placeCircle(BTN_CIRCLE, faceCx + spread, faceCy, btnR);
 
-        // L1/L2/R1/R2 + Select, in a row above the left stick.
-        float shR = baseRadius * 0.28f;
-        float rowY = leftStick.center.y - baseRadius * 1.9f;
-        placeCircle(BTN_L2, leftStick.center.x - shR * 2.3f, rowY, shR);
-        placeCircle(BTN_L1, leftStick.center.x - shR * 0.7f, rowY, shR);
-        placeCircle(BTN_R1, leftStick.center.x + shR * 0.9f, rowY, shR);
-        placeCircle(BTN_R2, leftStick.center.x + shR * 2.5f, rowY, shR);
+        // L1/L2/R1/R2, in a row above the left stick. Centers need to be at
+        // least 2*shR apart or the circles themselves overlap -- give them a
+        // clear gap on top of that.
+        float shR = baseRadius * 0.3f;
+        float shGap = shR * 2.5f;
+        float rowY = leftStick.center.y - baseRadius * 2.05f;
+        placeCircle(BTN_L2, leftStick.center.x - shGap * 1.5f, rowY, shR);
+        placeCircle(BTN_L1, leftStick.center.x - shGap * 0.5f, rowY, shR);
+        placeCircle(BTN_R1, leftStick.center.x + shGap * 0.5f, rowY, shR);
+        placeCircle(BTN_R2, leftStick.center.x + shGap * 1.5f, rowY, shR);
 
         b(BTN_L1).label = "TEL";
         b(BTN_R1).label = "APUNTAR";
@@ -341,9 +361,42 @@ public class TouchControlsView extends View {
                 canvas.drawCircle(btn.hitRect.centerX(), btn.hitRect.centerY(), r, fillPaint);
                 canvas.drawCircle(btn.hitRect.centerX(), btn.hitRect.centerY(), r, strokePaint);
             }
-            float textY = btn.hitRect.centerY() - (labelPaint.descent() + labelPaint.ascent()) / 2f;
-            canvas.drawText(btn.label, btn.hitRect.centerX(), textY, labelPaint);
+            float maxWidth = (btn.roundedRect ? btn.hitRect.width() : btn.hitRect.width() * 0.82f) - 8f;
+            drawFittedLabel(canvas, btn.label, btn.hitRect.centerX(), btn.hitRect.centerY(), maxWidth, baseLabelSize);
         }
+    }
+
+    /**
+     * Draws (possibly multi-line, via "\n") text centered at (cx, cy), shrinking
+     * the font until every line fits within maxWidth -- long words like
+     * "DISPARAR" or "APUNTAR" would otherwise spill out of a small button and
+     * overlap its neighbors.
+     */
+    private void drawFittedLabel(Canvas canvas, String label, float cx, float cy, float maxWidth, float startSize) {
+        String[] lines = label.split("\n");
+
+        float size = startSize;
+        labelPaint.setTextSize(size);
+        float widest = 0f;
+        for (String line : lines) widest = Math.max(widest, labelPaint.measureText(line));
+
+        float minSize = startSize * 0.4f;
+        while (widest > maxWidth && size > minSize) {
+            size -= 2f;
+            labelPaint.setTextSize(size);
+            widest = 0f;
+            for (String line : lines) widest = Math.max(widest, labelPaint.measureText(line));
+        }
+
+        float lineHeight = labelPaint.descent() - labelPaint.ascent();
+        float totalHeight = lineHeight * lines.length;
+        float y = cy - totalHeight / 2f - labelPaint.ascent();
+        for (String line : lines) {
+            canvas.drawText(line, cx, y, labelPaint);
+            y += lineHeight;
+        }
+
+        labelPaint.setTextSize(startSize); // restore for the next button
     }
 
     private void drawStick(Canvas canvas, Stick s) {

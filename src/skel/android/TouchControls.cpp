@@ -12,6 +12,7 @@
 #include "Frontend.h"
 #include "PlayerPed.h"
 #include "PlayerInfo.h"
+#include "CutsceneMgr.h"
 
 TouchPadState g_TouchState = {};
 
@@ -69,13 +70,21 @@ JAVA_WRAPPER Java_com_revc_game_TouchControlsView_nativeSetButton(JNIEnv *env, j
 	}
 }
 
-// 0 = frontend/menu, 1 = on foot, 2 = in a vehicle. Polled from Java on a
-// timer to decide which touch layout to show.
+// 0 = frontend/menu, 1 = on foot, 2 = in a vehicle, 3 = cutscene playing.
+// Polled from Java on a timer to decide which touch layout to show.
 extern "C" JNIEXPORT jint JNICALL
 Java_com_revc_game_TouchControlsView_nativeGetGameContext(JNIEnv *env, jobject obj)
 {
 	if (FrontEndMenuManager.GetIsMenuActive())
 		return 0;
+
+	// Cutscenes take control away from the player entirely; showing movement/
+	// action buttons during one is just confusing. CCutsceneMgr::Update()
+	// already skips on CPad::GetPad(0)->GetCrossJustDown() (or Start during
+	// the intro) -- we just need a big, obvious button wired to the same
+	// Cross press.
+	if (CCutsceneMgr::IsRunning())
+		return 3;
 
 	CPlayerPed *player = FindPlayerPed();
 	if (player != nullptr && player->InVehicle())
