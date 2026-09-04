@@ -1899,6 +1899,18 @@ void CaptureTouchPad(RwInt32 padID)
     if (Abs(g_TouchState.rightY) > ControlsManager.m_rStickDeadzone)
         pad->PCTempJoyState.RightStickY = (int32)(g_TouchState.rightY * 128.0f * ControlsManager.m_rStickSensY);
 
+    // Frontend menus support real mouse hover/click (see cursorCB() above for
+    // the desktop equivalent this mirrors); let a tap on a menu item work
+    // directly, not just the D-Pad. UpdateMouse() (called earlier this same
+    // frame, before CapturePad()) already overwrote these from the -- empty,
+    // since touches don't reach SDL's own mouse emulation here -- real mouse
+    // state, so it's safe to override them again right here.
+    if (FrontEndMenuManager.m_bMenuActive) {
+        FrontEndMenuManager.m_nMouseTempPosX = (int32)g_TouchState.menuMouseX;
+        FrontEndMenuManager.m_nMouseTempPosY = (int32)g_TouchState.menuMouseY;
+        CPad::NewMouseControllerState.LMB = g_TouchState.menuMouseDown;
+    }
+
     // This is the step the very first version of this function was missing:
     // without it, mappedButtons[] is updated but never actually turned into
     // button-down/up actions -- which is also how the frontend menu reads

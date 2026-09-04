@@ -32,6 +32,7 @@ public class TouchControlsView extends View {
 
     private static native void nativeSetStick(int stick, float x, float y);
     private static native void nativeSetButton(int button, boolean pressed);
+    private static native void nativeSetMenuMouse(float x, float y, boolean down);
     private static native int nativeGetGameContext(); // 0 = menu, 1 = on foot, 2 = in vehicle
 
     private static final int STICK_LEFT = 0;
@@ -94,6 +95,12 @@ public class TouchControlsView extends View {
 
     private final Stick leftStick = new Stick(STICK_LEFT);
     private final Stick rightStick = new Stick(STICK_RIGHT);
+
+    // A finger that landed on empty menu space (not on the D-Pad/OK/Atras/
+    // Start) acts as a direct pointer: menus support real mouse hover/click
+    // already, this just feeds it. Independent of the D-Pad, both work at
+    // the same time.
+    private int menuMousePointerId = -1;
 
     private final Button[] buttons = new Button[]{
             new Button(BTN_CIRCLE, "O"),
@@ -221,10 +228,10 @@ public class TouchControlsView extends View {
         leftStick.visible = false;
         rightStick.visible = false;
 
-        float w = width * 0.32f;
-        float h = height * 0.14f;
+        float w = width * 0.2f;
+        float h = height * 0.09f;
         placeRect(BTN_CROSS, width - w - width * 0.04f, height - h - height * 0.05f, width - width * 0.04f, height - height * 0.05f);
-        b(BTN_CROSS).label = "SALTAR\nESCENA";
+        b(BTN_CROSS).label = "SALTAR";
     }
 
     /** Frontend menus are D-Pad + confirm/cancel + Start driven -- no mouse, no sticks. */
@@ -232,26 +239,31 @@ public class TouchControlsView extends View {
         leftStick.visible = false;
         rightStick.visible = false;
 
-        // D-Pad cross, bottom-left.
-        float dCx = margin + baseRadius;
-        float dCy = height - margin - baseRadius;
-        float dR = baseRadius * 0.42f;
-        float spread = dR * 1.15f;
+        // D-Pad cross, bottom-left. In a "+" layout the diagonal neighbors
+        // (e.g. UP and LEFT) are the tight fit, not the opposite pair (UP and
+        // DOWN) -- their center distance is spread*sqrt(2), so spread needs
+        // to clear dR*sqrt(2) (~1.41*dR) for the circles not to overlap.
+        float dCx = margin + baseRadius * 1.1f;
+        float dCy = height - margin - baseRadius * 1.1f;
+        float dR = baseRadius * 0.36f;
+        float spread = dR * 1.75f;
         placeCircle(BTN_DPAD_UP, dCx, dCy - spread, dR);
         placeCircle(BTN_DPAD_DOWN, dCx, dCy + spread, dR);
         placeCircle(BTN_DPAD_LEFT, dCx - spread, dCy, dR);
         placeCircle(BTN_DPAD_RIGHT, dCx + spread, dCy, dR);
 
-        // Confirm / cancel, bottom-right.
+        // Confirm / cancel, bottom-right. Cancel is Triangle here, not
+        // Circle: this game binds "back" to Triangle (TRIANGLE_BACK_BUTTON
+        // in config.h), a Circle press does nothing in the frontend.
         float fCx = width - margin - baseRadius;
         float fCy = height - margin - baseRadius;
-        placeCircle(BTN_CROSS, fCx, fCy + dR * 1.15f, dR);
-        placeCircle(BTN_CIRCLE, fCx, fCy - dR * 1.15f, dR);
+        placeCircle(BTN_CROSS, fCx, fCy + dR * 1.9f, dR * 1.3f);
+        placeCircle(BTN_TRIANGLE, fCx, fCy - dR * 1.9f, dR * 1.3f);
 
         placeRect(BTN_START, width / 2f - baseRadius * 0.6f, margin, width / 2f + baseRadius * 0.6f, margin + baseRadius * 0.5f);
 
         b(BTN_CROSS).label = "OK";
-        b(BTN_CIRCLE).label = "ATRAS";
+        b(BTN_TRIANGLE).label = "ATRAS";
     }
 
     private void layoutOnFoot(float margin, float baseRadius) {
@@ -454,6 +466,10 @@ public class TouchControlsView extends View {
                 return;
             }
         }
+        if (currentContext == CONTEXT_MENU && menuMousePointerId == -1) {
+            menuMousePointerId = pointerId;
+            nativeSetMenuMouse(x, y, true);
+        }
     }
 
     private void handleMove(int pointerId, float x, float y) {
@@ -461,6 +477,8 @@ public class TouchControlsView extends View {
             updateStick(leftStick, x, y);
         } else if (rightStick.pointerId == pointerId) {
             updateStick(rightStick, x, y);
+        } else if (menuMousePointerId == pointerId) {
+            nativeSetMenuMouse(x, y, true);
         }
     }
 
@@ -481,6 +499,10 @@ public class TouchControlsView extends View {
                 setPressed(btn, false);
             }
         }
+        if (menuMousePointerId == pointerId) {
+            menuMousePointerId = -1;
+            nativeSetMenuMouse(0f, 0f, false);
+        }
     }
 
     /** Called on a context switch so nothing is left "stuck" pressed from the old layout. */
@@ -500,6 +522,10 @@ public class TouchControlsView extends View {
                 btn.pointerId = -1;
                 setPressed(btn, false);
             }
+        }
+        if (menuMousePointerId != -1) {
+            menuMousePointerId = -1;
+            nativeSetMenuMouse(0f, 0f, false);
         }
     }
 

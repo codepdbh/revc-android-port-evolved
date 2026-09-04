@@ -47,6 +47,13 @@ JAVA_WRAPPER Java_com_revc_game_TouchControlsView_nativeSetStick(JNIEnv *env, jo
 	}
 }
 
+JAVA_WRAPPER Java_com_revc_game_TouchControlsView_nativeSetMenuMouse(JNIEnv *env, jobject obj, jfloat x, jfloat y, jboolean down)
+{
+	g_TouchState.menuMouseX = x;
+	g_TouchState.menuMouseY = y;
+	g_TouchState.menuMouseDown = down;
+}
+
 JAVA_WRAPPER Java_com_revc_game_TouchControlsView_nativeSetButton(JNIEnv *env, jobject obj, jint button, jboolean pressed)
 {
 	switch (button) {

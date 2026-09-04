@@ -38,6 +38,14 @@ struct TouchPadState
 	bool select, start;
 	bool leftStickClick, rightStickClick; // L3, R3
 	bool dpadUp, dpadDown, dpadLeft, dpadRight;
+
+	// Frontend menus support real mouse hover/click (CMenuManager::CheckHover(),
+	// see cursorCB() in skel/sdl2/sdl2.cpp for the desktop equivalent this
+	// mirrors) -- letting a tap on a menu item work directly, instead of only
+	// through the D-Pad. Screen-pixel coordinates, same space as a real
+	// SDL_MOUSEMOTION event. Only applied while a menu is active.
+	float menuMouseX, menuMouseY;
+	bool menuMouseDown;
 };
 
 extern TouchPadState g_TouchState;
