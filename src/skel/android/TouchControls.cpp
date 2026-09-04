@@ -13,6 +13,7 @@
 #include "PlayerPed.h"
 #include "PlayerInfo.h"
 #include "CutsceneMgr.h"
+#include "General.h"
 
 TouchPadState g_TouchState = {};
 
@@ -75,6 +76,25 @@ JAVA_WRAPPER Java_com_revc_game_TouchControlsView_nativeSetButton(JNIEnv *env, j
 		case BTN_DPAD_RIGHT:  g_TouchState.dpadRight = pressed; break;
 		default: break;
 	}
+}
+
+// The SALTAR button calls this directly instead of simulating a Cross press.
+// CCutsceneMgr::Update()'s own skip check additionally requires
+// TheCamera.Cams[...].Mode == CCam::MODE_FLYBY and ms_cutsceneLoadStatus ==
+// CUTSCENE_LOADING_0 to even look at input that frame, on top of routing
+// through CPad's OldState/NewState edge detection -- too many ways for a
+// synthetic press to land on the wrong frame and be missed. Call the actual
+// skip function ourselves; the only thing worth preserving from that check
+// is not skipping the finale, which is deliberately not skippable.
+extern "C" JNIEXPORT void JNICALL
+Java_com_revc_game_TouchControlsView_nativeSkipCutscene(JNIEnv *env, jobject obj)
+{
+	if (!CCutsceneMgr::IsRunning())
+		return;
+	if (!CGeneral::faststricmp(CCutsceneMgr::GetCutsceneName(), "finale"))
+		return; // faststricmp returns false when the strings match
+
+	CCutsceneMgr::FinishCutscene();
 }
 
 // 0 = frontend/menu, 1 = on foot, 2 = in a vehicle, 3 = cutscene playing.

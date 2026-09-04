@@ -33,6 +33,7 @@ public class TouchControlsView extends View {
     private static native void nativeSetStick(int stick, float x, float y);
     private static native void nativeSetButton(int button, boolean pressed);
     private static native void nativeSetMenuMouse(float x, float y, boolean down);
+    private static native void nativeSkipCutscene();
     private static native int nativeGetGameContext(); // 0 = menu, 1 = on foot, 2 = in vehicle
 
     private static final int STICK_LEFT = 0;
@@ -463,6 +464,13 @@ public class TouchControlsView extends View {
             if (btn.visible && btn.pointerId == -1 && btn.hitRect.contains(x, y)) {
                 btn.pointerId = pointerId;
                 setPressed(btn, true);
+                if (currentContext == CONTEXT_CUTSCENE && btn.id == BTN_CROSS) {
+                    // Skip is a one-shot action -- call it directly instead of
+                    // relying on a synthesized Cross press making it through
+                    // CPad's edge detection on the right frame (see
+                    // TouchControls.cpp for why that was unreliable).
+                    nativeSkipCutscene();
+                }
                 return;
             }
         }
