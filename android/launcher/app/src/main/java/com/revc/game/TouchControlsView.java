@@ -1,6 +1,7 @@
 package com.revc.game;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -70,6 +71,7 @@ public class TouchControlsView extends View {
 
     private static final class Stick {
         final int id;
+        final String prefKey; // "L" / "R" -- stable identity for saved layout customization
         float baseRadius;
         float knobRadius;
         PointF center = new PointF();
@@ -77,8 +79,9 @@ public class TouchControlsView extends View {
         int pointerId = -1;
         boolean visible = true;
 
-        Stick(int id) {
+        Stick(int id, String prefKey) {
             this.id = id;
+            this.prefKey = prefKey;
         }
     }
 
@@ -97,8 +100,8 @@ public class TouchControlsView extends View {
         }
     }
 
-    private final Stick leftStick = new Stick(STICK_LEFT);
-    private final Stick rightStick = new Stick(STICK_RIGHT);
+    private final Stick leftStick = new Stick(STICK_LEFT, "L");
+    private final Stick rightStick = new Stick(STICK_RIGHT, "R");
 
     // A finger that landed on empty menu space (not on the D-Pad/OK/Atras/
     // Start) acts as a direct pointer: menus support real mouse hover/click
@@ -137,6 +140,20 @@ public class TouchControlsView extends View {
     // anchors to these instead of raw 0/width/height.
     private float areaLeft, areaTop, areaRight, areaBottom;
 
+    // Per-control, per-context position offset and size scale, so a control
+    // dragged/resized in the on-foot layout doesn't affect the vehicle one
+    // (they mostly share the same button IDs but different default spots).
+    private final SharedPreferences layoutPrefs;
+    private boolean editMode = false;
+    private Button selectedButton;
+    private Stick selectedStick;
+    private final RectF editToggleRect = new RectF();
+    private final RectF shrinkRect = new RectF();
+    private final RectF growRect = new RectF();
+    private final RectF resetRect = new RectF();
+    private static final float MIN_SCALE = 0.5f;
+    private static final float MAX_SCALE = 1.8f;
+
     private final Handler contextPoller = new Handler(Looper.getMainLooper());
     private final Runnable pollContext = new Runnable() {
         @Override
@@ -160,6 +177,8 @@ public class TouchControlsView extends View {
     public TouchControlsView(Context context) {
         super(context);
         setWillNotDraw(false);
+
+        layoutPrefs = context.getSharedPreferences("touch_controls_layout", Context.MODE_PRIVATE);
 
         fillPaint.setColor(Color.WHITE);
         strokePaint.setColor(Color.WHITE);
@@ -239,12 +258,12 @@ public class TouchControlsView extends View {
         leftStick.baseRadius = baseRadius;
         leftStick.knobRadius = baseRadius * 0.45f;
         leftStick.center.set(areaLeft + margin + baseRadius, areaBottom - margin - baseRadius);
-        leftStick.knob.set(leftStick.center.x, leftStick.center.y);
+        applyStickCustomization(leftStick);
 
         rightStick.baseRadius = baseRadius;
         rightStick.knobRadius = baseRadius * 0.45f;
         rightStick.center.set(areaRight - margin - baseRadius, areaBottom - margin - baseRadius);
-        rightStick.knob.set(rightStick.center.x, rightStick.center.y);
+        applyStickCustomization(rightStick);
 
         baseLabelSize = baseRadius * 0.3f;
         labelPaint.setTextSize(baseLabelSize);
@@ -268,6 +287,25 @@ public class TouchControlsView extends View {
             default:
                 layoutOnFoot(margin, baseRadius);
                 break;
+        }
+
+        layoutEditToolbar(baseRadius);
+    }
+
+    /** Small always-on-top toolbar, bottom-center -- clear of every context's own controls. */
+    private void layoutEditToolbar(float baseRadius) {
+        float midX = (areaLeft + areaRight) / 2f;
+        float toggleH = baseRadius * 0.4f;
+        float toggleW = baseRadius * (editMode ? 0.75f : 0.55f);
+        float y = areaBottom - toggleH - 6f;
+        editToggleRect.set(midX - toggleW / 2f, y, midX + toggleW / 2f, y + toggleH);
+
+        if (editMode) {
+            float gap = toggleW * 0.35f;
+            float sideW = toggleH * 1.3f;
+            shrinkRect.set(editToggleRect.left - gap - sideW, y, editToggleRect.left - gap, y + toggleH);
+            growRect.set(editToggleRect.right + gap, y, editToggleRect.right + gap + sideW, y + toggleH);
+            resetRect.set(growRect.right + gap, y, growRect.right + gap + sideW * 1.6f, y + toggleH);
         }
     }
 
@@ -396,6 +434,7 @@ public class TouchControlsView extends View {
         btn.visible = true;
         btn.roundedRect = false;
         btn.hitRect.set(cx - radius, cy - radius, cx + radius, cy + radius);
+        applyButtonCustomization(btn);
     }
 
     private void placeRect(int id, float left, float top, float right, float bottom) {
@@ -403,6 +442,85 @@ public class TouchControlsView extends View {
         btn.visible = true;
         btn.roundedRect = true;
         btn.hitRect.set(left, top, right, bottom);
+        applyButtonCustomization(btn);
+    }
+
+    // --- Layout customization (edit mode) ------------------------------------
+
+    private String prefKeyBase(String controlKey) {
+        return currentContext + "_" + controlKey;
+    }
+
+    private void applyButtonCustomization(Button btn) {
+        String key = prefKeyBase("btn" + btn.id);
+        float dx = layoutPrefs.getFloat(key + "_dx", 0f);
+        float dy = layoutPrefs.getFloat(key + "_dy", 0f);
+        float scale = layoutPrefs.getFloat(key + "_scale", 1f);
+        if (dx == 0f && dy == 0f && scale == 1f) return;
+
+        float cx = btn.hitRect.centerX() + dx;
+        float cy = btn.hitRect.centerY() + dy;
+        float w = btn.hitRect.width() * scale;
+        float h = btn.hitRect.height() * scale;
+        btn.hitRect.set(cx - w / 2f, cy - h / 2f, cx + w / 2f, cy + h / 2f);
+    }
+
+    private void applyStickCustomization(Stick s) {
+        String key = prefKeyBase("stick" + s.prefKey);
+        float dx = layoutPrefs.getFloat(key + "_dx", 0f);
+        float dy = layoutPrefs.getFloat(key + "_dy", 0f);
+        float scale = layoutPrefs.getFloat(key + "_scale", 1f);
+        s.center.offset(dx, dy);
+        s.baseRadius *= scale;
+        s.knobRadius *= scale;
+        s.knob.set(s.center.x, s.center.y);
+    }
+
+    private void saveButtonOffset(Button btn, float dx, float dy) {
+        String key = prefKeyBase("btn" + btn.id);
+        float prevDx = layoutPrefs.getFloat(key + "_dx", 0f);
+        float prevDy = layoutPrefs.getFloat(key + "_dy", 0f);
+        layoutPrefs.edit().putFloat(key + "_dx", prevDx + dx).putFloat(key + "_dy", prevDy + dy).apply();
+    }
+
+    private void saveStickOffset(Stick s, float dx, float dy) {
+        String key = prefKeyBase("stick" + s.prefKey);
+        float prevDx = layoutPrefs.getFloat(key + "_dx", 0f);
+        float prevDy = layoutPrefs.getFloat(key + "_dy", 0f);
+        layoutPrefs.edit().putFloat(key + "_dx", prevDx + dx).putFloat(key + "_dy", prevDy + dy).apply();
+    }
+
+    private void adjustSelectedScale(float delta) {
+        if (selectedButton != null) {
+            String key = prefKeyBase("btn" + selectedButton.id);
+            float scale = clampScale(layoutPrefs.getFloat(key + "_scale", 1f) + delta);
+            layoutPrefs.edit().putFloat(key + "_scale", scale).apply();
+        } else if (selectedStick != null) {
+            String key = prefKeyBase("stick" + selectedStick.prefKey);
+            float scale = clampScale(layoutPrefs.getFloat(key + "_scale", 1f) + delta);
+            layoutPrefs.edit().putFloat(key + "_scale", scale).apply();
+        } else {
+            return;
+        }
+        layoutControls();
+        invalidate();
+    }
+
+    private float clampScale(float scale) {
+        return Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale));
+    }
+
+    private void resetCurrentContextLayout() {
+        SharedPreferences.Editor editor = layoutPrefs.edit();
+        String prefix = currentContext + "_";
+        for (String k : layoutPrefs.getAll().keySet()) {
+            if (k.startsWith(prefix)) editor.remove(k);
+        }
+        editor.apply();
+        selectedButton = null;
+        selectedStick = null;
+        layoutControls();
+        invalidate();
     }
 
     @Override
@@ -424,7 +542,56 @@ public class TouchControlsView extends View {
             }
             float maxWidth = (btn.roundedRect ? btn.hitRect.width() : btn.hitRect.width() * 0.82f) - 8f;
             drawFittedLabel(canvas, btn.label, btn.hitRect.centerX(), btn.hitRect.centerY(), maxWidth, baseLabelSize);
+
+            if (editMode && btn == selectedButton) {
+                drawSelectionRing(canvas, btn.hitRect.centerX(), btn.hitRect.centerY(),
+                        btn.roundedRect ? btn.hitRect.width() / 2f + 10f : btn.hitRect.width() / 2f + 10f);
+            }
         }
+
+        if (editMode) {
+            if (leftStick.visible && selectedStick == leftStick)
+                drawSelectionRing(canvas, leftStick.center.x, leftStick.center.y, leftStick.baseRadius + 12f);
+            if (rightStick.visible && selectedStick == rightStick)
+                drawSelectionRing(canvas, rightStick.center.x, rightStick.center.y, rightStick.baseRadius + 12f);
+        }
+
+        drawEditToolbar(canvas);
+    }
+
+    private void drawSelectionRing(Canvas canvas, float cx, float cy, float radius) {
+        int prevColor = strokePaint.getColor();
+        float prevWidth = strokePaint.getStrokeWidth();
+        strokePaint.setColor(Color.YELLOW);
+        strokePaint.setStrokeWidth(5f);
+        canvas.drawCircle(cx, cy, radius, strokePaint);
+        strokePaint.setColor(prevColor);
+        strokePaint.setStrokeWidth(prevWidth);
+    }
+
+    private void drawEditToolbar(Canvas canvas) {
+        fillPaint.setAlpha(editMode ? 160 : 90);
+        canvas.drawRoundRect(editToggleRect, 10f, 10f, fillPaint);
+        canvas.drawRoundRect(editToggleRect, 10f, 10f, strokePaint);
+        drawFittedLabel(canvas, editMode ? "LISTO" : "⚙", editToggleRect.centerX(), editToggleRect.centerY(),
+                editToggleRect.width() - 8f, baseLabelSize * 0.8f);
+
+        if (!editMode) return;
+
+        boolean hasSelection = selectedButton != null || selectedStick != null;
+        fillPaint.setAlpha(hasSelection ? 140 : 60);
+        canvas.drawRoundRect(shrinkRect, 10f, 10f, fillPaint);
+        canvas.drawRoundRect(shrinkRect, 10f, 10f, strokePaint);
+        drawFittedLabel(canvas, "-", shrinkRect.centerX(), shrinkRect.centerY(), shrinkRect.width() - 8f, baseLabelSize);
+
+        canvas.drawRoundRect(growRect, 10f, 10f, fillPaint);
+        canvas.drawRoundRect(growRect, 10f, 10f, strokePaint);
+        drawFittedLabel(canvas, "+", growRect.centerX(), growRect.centerY(), growRect.width() - 8f, baseLabelSize);
+
+        fillPaint.setAlpha(110);
+        canvas.drawRoundRect(resetRect, 10f, 10f, fillPaint);
+        canvas.drawRoundRect(resetRect, 10f, 10f, strokePaint);
+        drawFittedLabel(canvas, "RESET", resetRect.centerX(), resetRect.centerY(), resetRect.width() - 8f, baseLabelSize * 0.8f);
     }
 
     /**
@@ -497,7 +664,66 @@ public class TouchControlsView extends View {
         return true;
     }
 
+    // Set while a finger drags the currently selected control in edit mode.
+    private int editDragPointerId = -1;
+    private float dragLastX, dragLastY;
+
     private void handleDown(int pointerId, float x, float y) {
+        if (editToggleRect.contains(x, y)) {
+            editMode = !editMode;
+            releaseAllInput();
+            if (!editMode) {
+                selectedButton = null;
+                selectedStick = null;
+            }
+            layoutControls();
+            return;
+        }
+
+        if (editMode) {
+            if (shrinkRect.contains(x, y)) {
+                adjustSelectedScale(-0.1f);
+                return;
+            }
+            if (growRect.contains(x, y)) {
+                adjustSelectedScale(0.1f);
+                return;
+            }
+            if (resetRect.contains(x, y)) {
+                resetCurrentContextLayout();
+                return;
+            }
+            for (Button btn : buttons) {
+                if (btn.visible && btn.hitRect.contains(x, y)) {
+                    selectedButton = btn;
+                    selectedStick = null;
+                    editDragPointerId = pointerId;
+                    dragLastX = x;
+                    dragLastY = y;
+                    return;
+                }
+            }
+            if (leftStick.visible && within(leftStick, x, y)) {
+                selectedStick = leftStick;
+                selectedButton = null;
+                editDragPointerId = pointerId;
+                dragLastX = x;
+                dragLastY = y;
+                return;
+            }
+            if (rightStick.visible && within(rightStick, x, y)) {
+                selectedStick = rightStick;
+                selectedButton = null;
+                editDragPointerId = pointerId;
+                dragLastX = x;
+                dragLastY = y;
+                return;
+            }
+            // Tapped empty space in edit mode -- don't fall through to normal
+            // gameplay press/menu-mouse handling below.
+            return;
+        }
+
         // Buttons win ties: a stick's "easy to grab" radius is deliberately
         // bigger than its drawn circle and can reach into a nearby button's
         // hitRect, but landing an exact tap inside a button should always
@@ -533,6 +759,21 @@ public class TouchControlsView extends View {
     }
 
     private void handleMove(int pointerId, float x, float y) {
+        if (editDragPointerId == pointerId) {
+            float dx = x - dragLastX;
+            float dy = y - dragLastY;
+            dragLastX = x;
+            dragLastY = y;
+            if (selectedButton != null) {
+                selectedButton.hitRect.offset(dx, dy);
+                saveButtonOffset(selectedButton, dx, dy);
+            } else if (selectedStick != null) {
+                selectedStick.center.offset(dx, dy);
+                selectedStick.knob.set(selectedStick.center.x, selectedStick.center.y);
+                saveStickOffset(selectedStick, dx, dy);
+            }
+            return;
+        }
         if (leftStick.pointerId == pointerId) {
             updateStick(leftStick, x, y);
         } else if (rightStick.pointerId == pointerId) {
@@ -543,6 +784,10 @@ public class TouchControlsView extends View {
     }
 
     private void handleUp(int pointerId) {
+        if (editDragPointerId == pointerId) {
+            editDragPointerId = -1;
+            return;
+        }
         if (leftStick.pointerId == pointerId) {
             leftStick.pointerId = -1;
             leftStick.knob.set(leftStick.center.x, leftStick.center.y);
