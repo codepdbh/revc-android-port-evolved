@@ -1850,6 +1850,10 @@ RwV2d rightStickPos;
 // into the same CControllerState/PCTempJoyState a physical SDL_GameController
 // would, so every context that already handles gamepad input (driving, on
 // foot, menus, ...) picks it up for free -- no separate action mapping needed.
+//
+// Button semantics/indices below match CControllerConfigManager::MapIdToButtonId()'s
+// LIBRW_SDL2 branch exactly (ControllerConfig.cpp) -- that table, not this one, is
+// the actual source of truth for what each SDL_CONTROLLER_BUTTON_* ends up doing.
 void CaptureTouchPad(RwInt32 padID)
 {
     if (ControlsManager.m_bFirstCapture == false) {
@@ -1864,12 +1868,22 @@ void CaptureTouchPad(RwInt32 padID)
     ControlsManager.m_NewState.isGamepad = true;
 
     memset(ControlsManager.m_NewState.mappedButtons, 0, sizeof(ControlsManager.m_NewState.mappedButtons));
-    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_A] = g_TouchState.buttonA;
-    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_B] = g_TouchState.buttonB;
-    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_X] = g_TouchState.buttonX;
-    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_Y] = g_TouchState.buttonY;
-    ControlsManager.m_NewState.mappedButtons[15] = g_TouchState.leftTrigger;  // brake / reverse
-    ControlsManager.m_NewState.mappedButtons[16] = g_TouchState.rightTrigger; // accelerate
+    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_B]           = g_TouchState.circle;
+    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_A]           = g_TouchState.cross;
+    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_X]           = g_TouchState.square;
+    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_Y]           = g_TouchState.triangle;
+    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_LEFTSHOULDER]  = g_TouchState.leftShoulder1;
+    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_RIGHTSHOULDER] = g_TouchState.rightShoulder1;
+    ControlsManager.m_NewState.mappedButtons[15]                                = g_TouchState.leftShoulder2;  // L2
+    ControlsManager.m_NewState.mappedButtons[16]                                = g_TouchState.rightShoulder2; // R2
+    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_BACK]        = g_TouchState.select;
+    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_START]       = g_TouchState.start;
+    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_LEFTSTICK]   = g_TouchState.leftStickClick;
+    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_RIGHTSTICK]  = g_TouchState.rightStickClick;
+    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_DPAD_UP]     = g_TouchState.dpadUp;
+    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_DPAD_DOWN]   = g_TouchState.dpadDown;
+    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_DPAD_LEFT]   = g_TouchState.dpadLeft;
+    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_DPAD_RIGHT]  = g_TouchState.dpadRight;
 
     CPad *pad = CPad::GetPad(padID);
 
@@ -1884,6 +1898,19 @@ void CaptureTouchPad(RwInt32 padID)
 
     if (Abs(g_TouchState.rightY) > ControlsManager.m_rStickDeadzone)
         pad->PCTempJoyState.RightStickY = (int32)(g_TouchState.rightY * 128.0f * ControlsManager.m_rStickSensY);
+
+    // This is the step the very first version of this function was missing:
+    // without it, mappedButtons[] is updated but never actually turned into
+    // button-down/up actions -- which is also how the frontend menu reads
+    // its own navigation input (see HandlePadButtonDown/Up in events.cpp,
+    // which branch on FrontEndMenuManager.m_bMenuActive). Skipping this call
+    // is why touch buttons previously did nothing in the menu *or* in game.
+    RsPadButtonStatus bs;
+    bs.padID = padID;
+    if (CPad::m_bMapPadOneToPadTwo)
+        bs.padID = 1;
+    RsPadEventHandler(rsPADBUTTONUP,   (void *)&bs);
+    RsPadEventHandler(rsPADBUTTONDOWN, (void *)&bs);
 }
 #endif
 
