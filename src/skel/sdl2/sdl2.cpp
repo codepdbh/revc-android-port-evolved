@@ -1327,6 +1327,14 @@ main(int argc, char *argv[])
     // synthesize mouse clicks/motion from the same touches (that's what
     // was making taps register as a mouse -- there is no mouse on Android).
     SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+
+    // The manifest already locks GameActivity to sensorLandscape, but SDL
+    // sets its own requested orientation at window-creation time (see
+    // SDLActivity.setOrientationBis(), called via JNI) based on this hint.
+    // With no hint at all it falls back to SCREEN_ORIENTATION_FULL_USER (or
+    // guesses from window w/h), which can override the manifest's lock back
+    // to portrait -- this is what was setting it, not the manifest failing.
+    SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
 #endif
 
     struct sigaction act;
@@ -1444,6 +1452,20 @@ main(int argc, char *argv[])
         SaveINIControllerSettings();
 #endif
     }
+
+#if defined ANDROID
+    // Action->button bindings (what Cross/Square/Circle/... actually *do*)
+    // only ever get set up when a physical SDL_GameController connects (see
+    // joysChangeCB() -> InitDefaultControlConfigJoyPad()). Our virtual pad
+    // never fires SDL_JOYDEVICEADDED, so without this, touching a face
+    // button correctly reaches AffectControllerStateOn_ButtonDown() but
+    // every GetControllerKeyAssociatedWithAction(ACTION, JOYSTICK) lookup in
+    // there comes back unbound and nothing happens -- sticks still work
+    // since movement writes PCTempJoyState.LeftStickX/Y directly, bypassing
+    // this table entirely, which is why only buttons were affected.
+    if (ControlsManager.ms_padButtonsInited == 0)
+        ControlsManager.InitDefaultControlConfigJoyPad(16);
+#endif
 
 #ifdef PS2_MENU
     int32 r = TheMemoryCard.CheckCardStateAtGameStartUp(CARD_ONE);
