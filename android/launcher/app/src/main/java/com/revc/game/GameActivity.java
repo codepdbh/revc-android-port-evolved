@@ -10,6 +10,8 @@ import android.os.Environment;
 import android.provider.Settings;
 import android.widget.Toast;
 
+import android.view.ViewGroup;
+
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
@@ -56,6 +58,12 @@ public class GameActivity extends SDLActivity {
         }
 
         super.onCreate(savedInstanceState);
+
+        // libreVC.so is already loaded at this point (loadLibraries(), called
+        // from within super.onCreate(), just did it), so TouchControlsView's
+        // native methods resolve fine without a separate System.loadLibrary.
+        mLayout.addView(new TouchControlsView(this),
+                new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     }
 
     @Override

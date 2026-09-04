@@ -34,6 +34,7 @@ long _dwOperatingSystemVersion;
 
 #if defined ANDROID
 #include "JavaWrapper.h"
+#include "TouchControls.h"
 extern char* StorageRootBuffer;
 #endif
 
@@ -1320,6 +1321,14 @@ main(int argc, char *argv[])
     InitMemoryMgr();
 #endif
 
+#if defined ANDROID
+    // TouchControlsView (Java) owns all touch input and feeds it into
+    // CaptureTouchPad() as a virtual gamepad; don't let SDL additionally
+    // synthesize mouse clicks/motion from the same touches (that's what
+    // was making taps register as a mouse -- there is no mouse on Android).
+    SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+#endif
+
     struct sigaction act;
     act.sa_sigaction = terminateHandler;
     act.sa_flags = SA_SIGINFO;
@@ -1836,6 +1845,48 @@ main(int argc, char *argv[])
 RwV2d leftStickPos;
 RwV2d rightStickPos;
 
+#if defined ANDROID
+// Feeds the on-screen touch controls (TouchControls.cpp/TouchControlsView.java)
+// into the same CControllerState/PCTempJoyState a physical SDL_GameController
+// would, so every context that already handles gamepad input (driving, on
+// foot, menus, ...) picks it up for free -- no separate action mapping needed.
+void CaptureTouchPad(RwInt32 padID)
+{
+    if (ControlsManager.m_bFirstCapture == false) {
+        memcpy(&ControlsManager.m_OldState, &ControlsManager.m_NewState, sizeof(ControlsManager.m_NewState));
+    } else {
+        memset(&ControlsManager.m_NewState, 0, sizeof(ControlsManager.m_NewState));
+        ControlsManager.m_bFirstCapture = false;
+    }
+
+    ControlsManager.m_NewState.numButtons = SDL_CONTROLLER_BUTTON_MAX - 1;
+    ControlsManager.m_NewState.id = -1;
+    ControlsManager.m_NewState.isGamepad = true;
+
+    memset(ControlsManager.m_NewState.mappedButtons, 0, sizeof(ControlsManager.m_NewState.mappedButtons));
+    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_A] = g_TouchState.buttonA;
+    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_B] = g_TouchState.buttonB;
+    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_X] = g_TouchState.buttonX;
+    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_Y] = g_TouchState.buttonY;
+    ControlsManager.m_NewState.mappedButtons[15] = g_TouchState.leftTrigger;  // brake / reverse
+    ControlsManager.m_NewState.mappedButtons[16] = g_TouchState.rightTrigger; // accelerate
+
+    CPad *pad = CPad::GetPad(padID);
+
+    if (Abs(g_TouchState.leftX) > ControlsManager.m_lStickDeadzone)
+        pad->PCTempJoyState.LeftStickX = (int32)(g_TouchState.leftX * 128.0f * ControlsManager.m_lStickSensX);
+
+    if (Abs(g_TouchState.leftY) > ControlsManager.m_lStickDeadzone)
+        pad->PCTempJoyState.LeftStickY = (int32)(g_TouchState.leftY * 128.0f * ControlsManager.m_lStickSensY);
+
+    if (Abs(g_TouchState.rightX) > ControlsManager.m_rStickDeadzone)
+        pad->PCTempJoyState.RightStickX = (int32)(g_TouchState.rightX * 128.0f * ControlsManager.m_rStickSensX);
+
+    if (Abs(g_TouchState.rightY) > ControlsManager.m_rStickDeadzone)
+        pad->PCTempJoyState.RightStickY = (int32)(g_TouchState.rightY * 128.0f * ControlsManager.m_rStickSensY);
+}
+#endif
+
 void CapturePad(RwInt32 padID)
 {
     static SDL_GameController* gamepad = nullptr;
@@ -1846,6 +1897,17 @@ void CapturePad(RwInt32 padID)
         gamepad = gamepad2;
     else
         assert("invalid padID");
+
+#if defined ANDROID
+    // No physical controller connected -- drive input from the on-screen
+    // touch controls instead. If a real gamepad *is* connected, prefer it
+    // and let the normal path below handle it.
+    if (gamepad == nullptr) {
+        if (padID == 0)
+            CaptureTouchPad(padID);
+        return;
+    }
+#endif
 
     if (gamepad == nullptr)
         return;
