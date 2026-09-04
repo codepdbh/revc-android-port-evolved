@@ -6,10 +6,13 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.PointF;
 import android.graphics.RectF;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.DisplayCutout;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.WindowInsets;
 
 /**
  * On-screen virtual gamepad, drawn directly over the SDL surface.
@@ -125,6 +128,15 @@ public class TouchControlsView extends View {
     private int currentContext = CONTEXT_ON_FOOT;
     private float baseLabelSize;
 
+    // Punch-hole/notch safe area, in sensorLandscape this can land on either
+    // the left or right edge depending on which way the phone is rotated --
+    // controls need to steer clear of it or a real camera cutout eats them.
+    private int safeLeft, safeTop, safeRight, safeBottom;
+
+    // Usable area after the safe insets above -- every layout*() method
+    // anchors to these instead of raw 0/width/height.
+    private float areaLeft, areaTop, areaRight, areaBottom;
+
     private final Handler contextPoller = new Handler(Looper.getMainLooper());
     private final Runnable pollContext = new Runnable() {
         @Override
@@ -156,12 +168,42 @@ public class TouchControlsView extends View {
         strokePaint.setStrokeWidth(3f);
         labelPaint.setColor(Color.WHITE);
         labelPaint.setTextAlign(Paint.Align.CENTER);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            setOnApplyWindowInsetsListener((v, insets) -> {
+                applyCutoutInsets(insets);
+                return insets;
+            });
+        }
+    }
+
+    private void applyCutoutInsets(WindowInsets insets) {
+        DisplayCutout cutout = insets.getDisplayCutout();
+        int left = 0, top = 0, right = 0, bottom = 0;
+        if (cutout != null) {
+            left = cutout.getSafeInsetLeft();
+            top = cutout.getSafeInsetTop();
+            right = cutout.getSafeInsetRight();
+            bottom = cutout.getSafeInsetBottom();
+        }
+        if (left != safeLeft || top != safeTop || right != safeRight || bottom != safeBottom) {
+            safeLeft = left;
+            safeTop = top;
+            safeRight = right;
+            safeBottom = bottom;
+            layoutControls();
+            invalidate();
+        }
     }
 
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
         contextPoller.postDelayed(pollContext, 500);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            WindowInsets insets = getRootWindowInsets();
+            if (insets != null) applyCutoutInsets(insets);
+        }
     }
 
     @Override
@@ -186,17 +228,22 @@ public class TouchControlsView extends View {
     private void layoutControls() {
         if (width == 0 || height == 0) return;
 
+        areaLeft = safeLeft;
+        areaTop = safeTop;
+        areaRight = width - safeRight;
+        areaBottom = height - safeBottom;
+
         float margin = Math.min(width, height) * 0.06f;
         float baseRadius = Math.min(width, height) * 0.15f;
 
         leftStick.baseRadius = baseRadius;
         leftStick.knobRadius = baseRadius * 0.45f;
-        leftStick.center.set(margin + baseRadius, height - margin - baseRadius);
+        leftStick.center.set(areaLeft + margin + baseRadius, areaBottom - margin - baseRadius);
         leftStick.knob.set(leftStick.center.x, leftStick.center.y);
 
         rightStick.baseRadius = baseRadius;
         rightStick.knobRadius = baseRadius * 0.45f;
-        rightStick.center.set(width - margin - baseRadius, height - margin - baseRadius);
+        rightStick.center.set(areaRight - margin - baseRadius, areaBottom - margin - baseRadius);
         rightStick.knob.set(rightStick.center.x, rightStick.center.y);
 
         baseLabelSize = baseRadius * 0.3f;
@@ -231,7 +278,7 @@ public class TouchControlsView extends View {
 
         float w = width * 0.2f;
         float h = height * 0.09f;
-        placeRect(BTN_CROSS, width - w - width * 0.04f, height - h - height * 0.05f, width - width * 0.04f, height - height * 0.05f);
+        placeRect(BTN_CROSS, areaRight - w - width * 0.04f, areaBottom - h - height * 0.05f, areaRight - width * 0.04f, areaBottom - height * 0.05f);
         b(BTN_CROSS).label = "SALTAR";
     }
 
@@ -244,8 +291,8 @@ public class TouchControlsView extends View {
         // (e.g. UP and LEFT) are the tight fit, not the opposite pair (UP and
         // DOWN) -- their center distance is spread*sqrt(2), so spread needs
         // to clear dR*sqrt(2) (~1.41*dR) for the circles not to overlap.
-        float dCx = margin + baseRadius * 1.1f;
-        float dCy = height - margin - baseRadius * 1.1f;
+        float dCx = areaLeft + margin + baseRadius * 1.1f;
+        float dCy = areaBottom - margin - baseRadius * 1.1f;
         float dR = baseRadius * 0.36f;
         float spread = dR * 1.75f;
         placeCircle(BTN_DPAD_UP, dCx, dCy - spread, dR);
@@ -256,12 +303,13 @@ public class TouchControlsView extends View {
         // Confirm / cancel, bottom-right. Cancel is Triangle here, not
         // Circle: this game binds "back" to Triangle (TRIANGLE_BACK_BUTTON
         // in config.h), a Circle press does nothing in the frontend.
-        float fCx = width - margin - baseRadius;
-        float fCy = height - margin - baseRadius;
+        float fCx = areaRight - margin - baseRadius;
+        float fCy = areaBottom - margin - baseRadius;
         placeCircle(BTN_CROSS, fCx, fCy + dR * 1.9f, dR * 1.3f);
         placeCircle(BTN_TRIANGLE, fCx, fCy - dR * 1.9f, dR * 1.3f);
 
-        placeRect(BTN_START, width / 2f - baseRadius * 0.6f, margin, width / 2f + baseRadius * 0.6f, margin + baseRadius * 0.5f);
+        float midX = (areaLeft + areaRight) / 2f;
+        placeRect(BTN_START, midX - baseRadius * 0.6f, areaTop + margin, midX + baseRadius * 0.6f, areaTop + margin + baseRadius * 0.5f);
 
         b(BTN_CROSS).label = "OK";
         b(BTN_TRIANGLE).label = "ATRAS";
@@ -301,8 +349,8 @@ public class TouchControlsView extends View {
         b(BTN_R1).label = "APUNTAR";
 
         // Select (camera view) and Start (pause), small, top corners.
-        placeRect(BTN_SELECT, margin, margin, margin + baseRadius * 0.7f, margin + baseRadius * 0.35f);
-        placeRect(BTN_START, width - margin - baseRadius * 0.7f, margin, width - margin, margin + baseRadius * 0.35f);
+        placeRect(BTN_SELECT, areaLeft + margin, areaTop + margin, areaLeft + margin + baseRadius * 0.7f, areaTop + margin + baseRadius * 0.35f);
+        placeRect(BTN_START, areaRight - margin - baseRadius * 0.7f, areaTop + margin, areaRight - margin, areaTop + margin + baseRadius * 0.35f);
         b(BTN_SELECT).label = "CAM";
         b(BTN_START).label = "≡";
     }
@@ -316,8 +364,8 @@ public class TouchControlsView extends View {
         float pedalW = baseRadius * 0.9f;
         float pedalH = baseRadius * 1.0f;
         float px = rightStick.center.x - baseRadius * 2.1f;
-        placeRect(BTN_CROSS, px - pedalW / 2, height - margin - pedalH, px + pedalW / 2, height - margin);
-        placeRect(BTN_SQUARE, px - pedalW / 2, height - margin - pedalH * 2.1f, px + pedalW / 2, height - margin - pedalH * 1.1f);
+        placeRect(BTN_CROSS, px - pedalW / 2, areaBottom - margin - pedalH, px + pedalW / 2, areaBottom - margin);
+        placeRect(BTN_SQUARE, px - pedalW / 2, areaBottom - margin - pedalH * 2.1f, px + pedalW / 2, areaBottom - margin - pedalH * 1.1f);
         b(BTN_CROSS).label = "GAS";
         b(BTN_SQUARE).label = "FRENO";
 
@@ -339,7 +387,7 @@ public class TouchControlsView extends View {
         placeCircle(BTN_L3, leftStick.center.x, rowY - shR * 2.2f, shR);
         b(BTN_L3).label = "BOCINA";
 
-        placeRect(BTN_SELECT, margin, margin, margin + baseRadius * 0.7f, margin + baseRadius * 0.35f);
+        placeRect(BTN_SELECT, areaLeft + margin, areaTop + margin, areaLeft + margin + baseRadius * 0.7f, areaTop + margin + baseRadius * 0.35f);
         b(BTN_SELECT).label = "CAM";
     }
 
@@ -450,16 +498,10 @@ public class TouchControlsView extends View {
     }
 
     private void handleDown(int pointerId, float x, float y) {
-        if (leftStick.visible && leftStick.pointerId == -1 && within(leftStick, x, y)) {
-            leftStick.pointerId = pointerId;
-            updateStick(leftStick, x, y);
-            return;
-        }
-        if (rightStick.visible && rightStick.pointerId == -1 && within(rightStick, x, y)) {
-            rightStick.pointerId = pointerId;
-            updateStick(rightStick, x, y);
-            return;
-        }
+        // Buttons win ties: a stick's "easy to grab" radius is deliberately
+        // bigger than its drawn circle and can reach into a nearby button's
+        // hitRect, but landing an exact tap inside a button should always
+        // hit that button, not the stick behind it.
         for (Button btn : buttons) {
             if (btn.visible && btn.pointerId == -1 && btn.hitRect.contains(x, y)) {
                 btn.pointerId = pointerId;
@@ -473,6 +515,16 @@ public class TouchControlsView extends View {
                 }
                 return;
             }
+        }
+        if (leftStick.visible && leftStick.pointerId == -1 && within(leftStick, x, y)) {
+            leftStick.pointerId = pointerId;
+            updateStick(leftStick, x, y);
+            return;
+        }
+        if (rightStick.visible && rightStick.pointerId == -1 && within(rightStick, x, y)) {
+            rightStick.pointerId = pointerId;
+            updateStick(rightStick, x, y);
+            return;
         }
         if (currentContext == CONTEXT_MENU && menuMousePointerId == -1) {
             menuMousePointerId = pointerId;
@@ -545,7 +597,7 @@ public class TouchControlsView extends View {
     private boolean within(Stick s, float x, float y) {
         float dx = x - s.center.x;
         float dy = y - s.center.y;
-        float r = s.baseRadius * 1.6f; // generous grab area
+        float r = s.baseRadius * 1.25f; // generous, but buttons above now win ties anyway (see handleDown)
         return dx * dx + dy * dy <= r * r;
     }
 

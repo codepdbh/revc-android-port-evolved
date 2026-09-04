@@ -11,6 +11,7 @@ import android.provider.Settings;
 import android.widget.Toast;
 
 import android.view.ViewGroup;
+import android.view.WindowManager;
 
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -58,6 +59,16 @@ public class GameActivity extends SDLActivity {
         }
 
         super.onCreate(savedInstanceState);
+
+        // Draw the game (and our touch controls) behind the camera cutout
+        // consistently in landscape, instead of the system letterboxing
+        // around it -- our TouchControlsView reads the actual safe-area
+        // insets and steers controls clear of it either way, but the game
+        // view itself should still fill the whole screen.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            getWindow().getAttributes().layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+        }
 
         // libreVC.so is already loaded at this point (loadLibraries(), called
         // from within super.onCreate(), just did it), so TouchControlsView's
