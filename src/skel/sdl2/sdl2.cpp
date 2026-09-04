@@ -34,6 +34,7 @@ long _dwOperatingSystemVersion;
 
 #if defined ANDROID
 #include "JavaWrapper.h"
+#include "TouchControls.h"
 extern char* StorageRootBuffer;
 #endif
 
@@ -1320,6 +1321,22 @@ main(int argc, char *argv[])
     InitMemoryMgr();
 #endif
 
+#if defined ANDROID
+    // TouchControlsView (Java) owns all touch input and feeds it into
+    // CaptureTouchPad() as a virtual gamepad; don't let SDL additionally
+    // synthesize mouse clicks/motion from the same touches (that's what
+    // was making taps register as a mouse -- there is no mouse on Android).
+    SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+
+    // The manifest already locks GameActivity to sensorLandscape, but SDL
+    // sets its own requested orientation at window-creation time (see
+    // SDLActivity.setOrientationBis(), called via JNI) based on this hint.
+    // With no hint at all it falls back to SCREEN_ORIENTATION_FULL_USER (or
+    // guesses from window w/h), which can override the manifest's lock back
+    // to portrait -- this is what was setting it, not the manifest failing.
+    SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
+#endif
+
     struct sigaction act;
     act.sa_sigaction = terminateHandler;
     act.sa_flags = SA_SIGINFO;
@@ -1435,6 +1452,20 @@ main(int argc, char *argv[])
         SaveINIControllerSettings();
 #endif
     }
+
+#if defined ANDROID
+    // Action->button bindings (what Cross/Square/Circle/... actually *do*)
+    // only ever get set up when a physical SDL_GameController connects (see
+    // joysChangeCB() -> InitDefaultControlConfigJoyPad()). Our virtual pad
+    // never fires SDL_JOYDEVICEADDED, so without this, touching a face
+    // button correctly reaches AffectControllerStateOn_ButtonDown() but
+    // every GetControllerKeyAssociatedWithAction(ACTION, JOYSTICK) lookup in
+    // there comes back unbound and nothing happens -- sticks still work
+    // since movement writes PCTempJoyState.LeftStickX/Y directly, bypassing
+    // this table entirely, which is why only buttons were affected.
+    if (ControlsManager.ms_padButtonsInited == 0)
+        ControlsManager.InitDefaultControlConfigJoyPad(16);
+#endif
 
 #ifdef PS2_MENU
     int32 r = TheMemoryCard.CheckCardStateAtGameStartUp(CARD_ONE);
@@ -1836,6 +1867,87 @@ main(int argc, char *argv[])
 RwV2d leftStickPos;
 RwV2d rightStickPos;
 
+#if defined ANDROID
+// Feeds the on-screen touch controls (TouchControls.cpp/TouchControlsView.java)
+// into the same CControllerState/PCTempJoyState a physical SDL_GameController
+// would, so every context that already handles gamepad input (driving, on
+// foot, menus, ...) picks it up for free -- no separate action mapping needed.
+//
+// Button semantics/indices below match CControllerConfigManager::MapIdToButtonId()'s
+// LIBRW_SDL2 branch exactly (ControllerConfig.cpp) -- that table, not this one, is
+// the actual source of truth for what each SDL_CONTROLLER_BUTTON_* ends up doing.
+void CaptureTouchPad(RwInt32 padID)
+{
+    if (ControlsManager.m_bFirstCapture == false) {
+        memcpy(&ControlsManager.m_OldState, &ControlsManager.m_NewState, sizeof(ControlsManager.m_NewState));
+    } else {
+        memset(&ControlsManager.m_NewState, 0, sizeof(ControlsManager.m_NewState));
+        ControlsManager.m_bFirstCapture = false;
+    }
+
+    ControlsManager.m_NewState.numButtons = SDL_CONTROLLER_BUTTON_MAX - 1;
+    ControlsManager.m_NewState.id = -1;
+    ControlsManager.m_NewState.isGamepad = true;
+
+    memset(ControlsManager.m_NewState.mappedButtons, 0, sizeof(ControlsManager.m_NewState.mappedButtons));
+    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_B]           = g_TouchState.circle;
+    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_A]           = g_TouchState.cross;
+    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_X]           = g_TouchState.square;
+    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_Y]           = g_TouchState.triangle;
+    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_LEFTSHOULDER]  = g_TouchState.leftShoulder1;
+    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_RIGHTSHOULDER] = g_TouchState.rightShoulder1;
+    ControlsManager.m_NewState.mappedButtons[15]                                = g_TouchState.leftShoulder2;  // L2
+    ControlsManager.m_NewState.mappedButtons[16]                                = g_TouchState.rightShoulder2; // R2
+    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_BACK]        = g_TouchState.select;
+    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_START]       = g_TouchState.start;
+    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_LEFTSTICK]   = g_TouchState.leftStickClick;
+    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_RIGHTSTICK]  = g_TouchState.rightStickClick;
+    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_DPAD_UP]     = g_TouchState.dpadUp;
+    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_DPAD_DOWN]   = g_TouchState.dpadDown;
+    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_DPAD_LEFT]   = g_TouchState.dpadLeft;
+    ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_DPAD_RIGHT]  = g_TouchState.dpadRight;
+
+    CPad *pad = CPad::GetPad(padID);
+
+    if (Abs(g_TouchState.leftX) > ControlsManager.m_lStickDeadzone)
+        pad->PCTempJoyState.LeftStickX = (int32)(g_TouchState.leftX * 128.0f * ControlsManager.m_lStickSensX);
+
+    if (Abs(g_TouchState.leftY) > ControlsManager.m_lStickDeadzone)
+        pad->PCTempJoyState.LeftStickY = (int32)(g_TouchState.leftY * 128.0f * ControlsManager.m_lStickSensY);
+
+    if (Abs(g_TouchState.rightX) > ControlsManager.m_rStickDeadzone)
+        pad->PCTempJoyState.RightStickX = (int32)(g_TouchState.rightX * 128.0f * ControlsManager.m_rStickSensX);
+
+    if (Abs(g_TouchState.rightY) > ControlsManager.m_rStickDeadzone)
+        pad->PCTempJoyState.RightStickY = (int32)(g_TouchState.rightY * 128.0f * ControlsManager.m_rStickSensY);
+
+    // Frontend menus support real mouse hover/click (see cursorCB() above for
+    // the desktop equivalent this mirrors); let a tap on a menu item work
+    // directly, not just the D-Pad. UpdateMouse() (called earlier this same
+    // frame, before CapturePad()) already overwrote these from the -- empty,
+    // since touches don't reach SDL's own mouse emulation here -- real mouse
+    // state, so it's safe to override them again right here.
+    if (FrontEndMenuManager.m_bMenuActive) {
+        FrontEndMenuManager.m_nMouseTempPosX = (int32)g_TouchState.menuMouseX;
+        FrontEndMenuManager.m_nMouseTempPosY = (int32)g_TouchState.menuMouseY;
+        CPad::NewMouseControllerState.LMB = g_TouchState.menuMouseDown;
+    }
+
+    // This is the step the very first version of this function was missing:
+    // without it, mappedButtons[] is updated but never actually turned into
+    // button-down/up actions -- which is also how the frontend menu reads
+    // its own navigation input (see HandlePadButtonDown/Up in events.cpp,
+    // which branch on FrontEndMenuManager.m_bMenuActive). Skipping this call
+    // is why touch buttons previously did nothing in the menu *or* in game.
+    RsPadButtonStatus bs;
+    bs.padID = padID;
+    if (CPad::m_bMapPadOneToPadTwo)
+        bs.padID = 1;
+    RsPadEventHandler(rsPADBUTTONUP,   (void *)&bs);
+    RsPadEventHandler(rsPADBUTTONDOWN, (void *)&bs);
+}
+#endif
+
 void CapturePad(RwInt32 padID)
 {
     static SDL_GameController* gamepad = nullptr;
@@ -1846,6 +1958,17 @@ void CapturePad(RwInt32 padID)
         gamepad = gamepad2;
     else
         assert("invalid padID");
+
+#if defined ANDROID
+    // No physical controller connected -- drive input from the on-screen
+    // touch controls instead. If a real gamepad *is* connected, prefer it
+    // and let the normal path below handle it.
+    if (gamepad == nullptr) {
+        if (padID == 0)
+            CaptureTouchPad(padID);
+        return;
+    }
+#endif
 
     if (gamepad == nullptr)
         return;

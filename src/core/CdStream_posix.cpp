@@ -226,12 +226,20 @@ CdStreamInit(int32 numChannels)
 #if defined ANDROID
 	char imgPath[MAX_PATH];
 	if(StorageRootBuffer == NULL) {
+		// setGamePath() (JNI) is what normally fills this in, but this
+		// launcher passes the path via "--dir" instead, which only sets
+		// the STORAGE_ROOT env var (see FileMgr.cpp). Reuse it here too,
+		// falling back to cwd only if it was never set at all.
+		StorageRootBuffer = getenv("STORAGE_ROOT");
+	}
+	if(StorageRootBuffer == NULL) {
 		char pwd[128];
 		getcwd(pwd, 128);
 		setenv("STORAGE_ROOT", pwd, 1);
+		StorageRootBuffer = getenv("STORAGE_ROOT");
         debug("%s\n", pwd);
 	}
-	
+
 	debug("FILES %s\n", StorageRootBuffer);
 	strcpy(imgPath, StorageRootBuffer);
 	strcat(imgPath, "/models/gta3.img");

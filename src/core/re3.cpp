@@ -197,8 +197,26 @@ CustomFrontendOptionsPopulate(void)
 #define MINI_CASE_SENSITIVE
 #include "ini.h"
 
-mINI::INIFile ini("reVC.ini");
 mINI::INIStructure cfg;
+
+// The ini's path can't just be a global "reVC.ini": on Android that's read
+// relative to "/", which isn't writable, and STORAGE_ROOT isn't known yet
+// at static-init time (this .so is loaded before "--dir" is parsed). So
+// build the mINI::INIFile lazily, on first actual read/write, by which
+// point STORAGE_ROOT is set.
+mINI::INIFile &GetIniFile()
+{
+#if defined ANDROID
+	static std::string iniPath = [] {
+		const char *root = getenv("STORAGE_ROOT");
+		return root ? std::string(root) + "/reVC.ini" : std::string("reVC.ini");
+	}();
+#else
+	static std::string iniPath = "reVC.ini";
+#endif
+	static mINI::INIFile ini(iniPath);
+	return ini;
+}
 
 bool ReadIniIfExists(const char *cat, const char *key, uint32 *out)
 {
@@ -479,12 +497,12 @@ void SaveINIControllerSettings()
 #endif
 	StoreIni("Controller", "PadButtonsInited", ControlsManager.ms_padButtonsInited);
 
-	ini.write(cfg);
+	GetIniFile().write(cfg);
 }
 
 bool LoadINISettings()
 {
-	if (!ini.read(cfg))
+	if (!GetIniFile().read(cfg))
 		return false;
 
 #ifdef IMPROVED_VIDEOMODE
@@ -682,7 +700,7 @@ void SaveINISettings()
 	}
 #endif
 
-	ini.write(cfg);
+	GetIniFile().write(cfg);
 }
 
 #endif
