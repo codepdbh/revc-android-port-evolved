@@ -1,15 +1,13 @@
 #define _CRT_SECURE_NO_WARNINGS
 #define WITH_D3D // not WITHD3D, so it's librw define
-#include <rwcore.h>
-#include <rpworld.h>
+#include "common.h"
 #include <rpmatfx.h>
-#include <rphanim.h>
-#include <rpskin.h>
 #include <assert.h>
 #include <string.h>
 #ifndef _WIN32
 #include "crossplatform.h"
 #endif
+#include "FileMgr.h"
 
 using namespace rw;
 
@@ -347,6 +345,7 @@ RwStream *RwStreamOpen(RwStreamType type, RwStreamAccessType accessType, const v
 	StreamMemory *mem;
 	RwMemory *memargs;
 	const char *mode;
+	char bundledPath[FILEMGR_PATH_SIZE];
 
 	switch(accessType){
 	case rwSTREAMREAD: mode = "rb"; break;
@@ -358,6 +357,9 @@ RwStream *RwStreamOpen(RwStreamType type, RwStreamAccessType accessType, const v
 	// oh god this is horrible. librw streams really need fixing
 	switch(type){
 	case rwSTREAMFILENAME:{
+		if(accessType == rwSTREAMREAD &&
+		   CFileMgr::ResolveBundledGameFile((const char*)pData, bundledPath, sizeof(bundledPath)))
+			pData = bundledPath;
 		StreamFile fakefile;
 		file = rwNewT(StreamFile, 1, 0);
 		memcpy(file, &fakefile, sizeof(StreamFile));

@@ -191,6 +191,7 @@ void ReplaceAtomicPipeCallback();
 bool
 CGame::InitialiseRenderWare(void)
 {
+	CFileMgr::SetDir("");
 	ValidateVersion();
 #ifdef USE_TEXTURE_POOL
 	_TexturePoolsInitialise();

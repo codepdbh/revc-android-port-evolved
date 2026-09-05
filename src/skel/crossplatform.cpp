@@ -2,6 +2,62 @@
 #include "crossplatform.h"
 #include "FileMgr.h"
 
+#ifdef __APPLE__
+#include <errno.h>
+#include <pwd.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+static bool
+CreateDirectoryTree(const char *path)
+{
+	char current[PATH_MAX];
+	int length = snprintf(current, sizeof(current), "%s", path);
+	if(length < 0 || length >= (int)sizeof(current))
+		return false;
+
+	for(char *separator = current + 1; *separator != '\0'; separator++){
+		if(*separator != '/')
+			continue;
+
+		*separator = '\0';
+		if(mkdir(current, 0755) != 0 && errno != EEXIST){
+			*separator = '/';
+			return false;
+		}
+		*separator = '/';
+	}
+
+	return mkdir(current, 0755) == 0 || errno == EEXIST;
+}
+
+const char *
+GetMacOSUserFilesFolder()
+{
+	static char path[PATH_MAX];
+	const char *home = getenv("HOME");
+	if(home == nil || home[0] == '\0'){
+		struct passwd *user = getpwuid(getuid());
+		home = user == nil ? nil : user->pw_dir;
+	}
+	if(home == nil || home[0] == '\0')
+		return "userfiles";
+
+#ifdef USE_MY_DOCUMENTS
+	const char *relativePath = "Library/Application Support/Grand Theft Auto - Vice City/p_drive/Documents/GTA Vice City User Files";
+#else
+	const char *relativePath = "Library/Application Support/reVC";
+#endif
+	int length = snprintf(path, sizeof(path), "%s/%s", home, relativePath);
+	if(length < 0 || length >= (int)sizeof(path))
+		return "userfiles";
+
+	if(!CreateDirectoryTree(path))
+		debug("Couldn't create macOS user files directory: %s\n", path);
+	return path;
+}
+#endif
+
 // Codes compatible with Windows and Linux
 #ifndef _WIN32
 

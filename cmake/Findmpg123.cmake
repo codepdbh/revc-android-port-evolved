@@ -9,7 +9,7 @@
 
 find_package(PkgConfig QUIET)
 if(PKG_CONFIG_FOUND)
-    pkg_search_module(PKG_MPG123 mpg123)
+    pkg_search_module(PKG_MPG123 libmpg123)
 endif()
 
 find_path(mpg123_INCLUDE_DIR mpg123.h
@@ -19,7 +19,7 @@ find_path(mpg123_INCLUDE_DIR mpg123.h
 )
 
 find_library(mpg123_LIBRARIES NAMES mpg123 mpg123-0 libmpg123-0
-    HINTS ${PKG_MPG123_LIBRARIES}
+    HINTS ${PKG_MPG123_LIBRARY_DIRS}
     PATHS "${mpg123_DIR}"
     PATH_SUFFIXES lib
 )

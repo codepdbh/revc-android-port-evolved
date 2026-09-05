@@ -1,3 +1,6 @@
+#ifndef __GTA_CROSSPLATFORM_H__
+#define __GTA_CROSSPLATFORM_H__
+
 #ifndef GTA_PS2
 
 #include <time.h>
@@ -110,6 +113,10 @@ extern RwUInt32 gGameState;
 
 RwBool IsForegroundApp();
 
+#ifdef __APPLE__
+const char *GetMacOSUserFilesFolder();
+#endif
+
 #ifndef MAX_PATH
     #if !defined _WIN32 || defined __MINGW32__
     #define MAX_PATH PATH_MAX
@@ -199,3 +206,5 @@ void GetDateFormat(int, int, SYSTEMTIME*, int, char*, int);
 
 #endif
 #endif
+
+#endif // __GTA_CROSSPLATFORM_H__

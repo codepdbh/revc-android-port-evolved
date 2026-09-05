@@ -78,6 +78,7 @@ static RwBool		  RwInitialised = FALSE;
 static RwSubSystemInfo GsubSysInfo[MAX_SUBSYSTEMS];
 static RwInt32		GnumSubSystems = 0;
 static RwInt32		GcurSel = 0, GcurSelVM = 0;
+static RwInt32		desktopWidth = 0, desktopHeight = 0;
 
 static RwBool useDefault;
 
@@ -167,6 +168,8 @@ const char *_psGetUserFilesFolder()
 	
 	strcpy(szUserFiles, "data");
 	return szUserFiles;
+#elif defined __APPLE__
+	return GetMacOSUserFilesFolder();
 #else
 	static char szUserFiles[256];
 	strcpy(szUserFiles, "userfiles");
@@ -276,8 +279,20 @@ psTimer(void)
 void
 psMouseSetPos(RwV2d *pos)
 {
-	glfwSetCursorPos(PSGLOBAL(window), pos->x, pos->y);
-	
+	int winw, winh;
+	glfwGetWindowSize(PSGLOBAL(window), &winw, &winh);
+	glfwSetCursorPos(PSGLOBAL(window),
+		pos->x * (double)winw / RsGlobal.maximumWidth,
+		pos->y * (double)winh / RsGlobal.maximumHeight);
+	FrontEndMenuManager.m_nMouseTempPosX = pos->x;
+	FrontEndMenuManager.m_nMouseTempPosY = pos->y;
+	FrontEndMenuManager.m_nMousePosX = pos->x;
+	FrontEndMenuManager.m_nMousePosY = pos->y;
+	FrontEndMenuManager.m_nMouseOldPosX = pos->x;
+	FrontEndMenuManager.m_nMouseOldPosY = pos->y;
+	if (glfwGetWindowAttrib(PSGLOBAL(window), GLFW_FOCUSED))
+		PSGLOBAL(cursorIsInWindow) = true;
+
 	PSGLOBAL(lastMousePos.x) = (RwInt32)pos->x;
 
 	PSGLOBAL(lastMousePos.y) = (RwInt32)pos->y;
@@ -745,7 +760,12 @@ psSelectDevice()
 	RwVideoMode			vm;
 	RwInt32				subSysNum;
 	RwInt32				AutoRenderer = 0;
-	
+
+	const GLFWvidmode *desktopMode = glfwGetVideoMode(glfwGetPrimaryMonitor());
+	if (desktopMode) {
+		desktopWidth = desktopMode->width;
+		desktopHeight = desktopMode->height;
+	}
 
 	RwBool modeFound = FALSE;
 	
@@ -834,16 +854,16 @@ psSelectDevice()
 		if(FrontEndMenuManager.m_nPrefsWidth == 0 ||
 		   FrontEndMenuManager.m_nPrefsHeight == 0 ||
 		   FrontEndMenuManager.m_nPrefsDepth == 0){
-			// Defaults if nothing specified
 			const GLFWvidmode *mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
 			FrontEndMenuManager.m_nPrefsWidth = mode->width;
 			FrontEndMenuManager.m_nPrefsHeight = mode->height;
 			FrontEndMenuManager.m_nPrefsDepth = 32;
-			FrontEndMenuManager.m_nPrefsWindowed = 0;
 		}
 
 		// Find the videomode that best fits what we got from the settings file
+		bestWndMode = -1;
 		RwInt32 bestFsMode = -1;
+		RwInt32 firstFsMode = -1;
 		RwInt32 bestWidth = -1;
 		RwInt32 bestHeight = -1;
 		RwInt32 bestDepth = -1;
@@ -853,6 +873,8 @@ psSelectDevice()
 			if (!(vm.flags & rwVIDEOMODEEXCLUSIVE)){
 				bestWndMode = GcurSelVM;
 			} else {
+				if(firstFsMode < 0)
+					firstFsMode = GcurSelVM;
 				// try the largest one that isn't larger than what we wanted
 				if(vm.width >= bestWidth && vm.width <= FrontEndMenuManager.m_nPrefsWidth &&
 				   vm.height >= bestHeight && vm.height <= FrontEndMenuManager.m_nPrefsHeight &&
@@ -865,33 +887,47 @@ psSelectDevice()
 			}
 		}
 
-		if(bestFsMode < 0){
+		RwInt32 selectedFsMode = bestFsMode >= 0 ? bestFsMode : firstFsMode;
+		GcurSelVM = selectedFsMode;
+		if(GcurSelVM < 0 && FrontEndMenuManager.m_nPrefsWindowed)
+			GcurSelVM = bestWndMode;
+		if(GcurSelVM < 0){
 			printf("WARNING: Cannot find desired video mode, selecting device cancelled\n");
 			return FALSE;
 		}
-		GcurSelVM = bestFsMode;
 
-		FrontEndMenuManager.m_nDisplayVideoMode = GcurSelVM;
-		FrontEndMenuManager.m_nPrefsVideoMode = FrontEndMenuManager.m_nDisplayVideoMode;
+		if(selectedFsMode >= 0){
+			FrontEndMenuManager.m_nDisplayVideoMode = selectedFsMode;
+			FrontEndMenuManager.m_nPrefsVideoMode = FrontEndMenuManager.m_nDisplayVideoMode;
+		}
 
 		FrontEndMenuManager.m_nSelectedScreenMode = FrontEndMenuManager.m_nPrefsWindowed;
+	}
+#endif
+
+#ifdef IMPROVED_VIDEOMODE
+	if (FrontEndMenuManager.m_nPrefsWindowed && bestWndMode < 0){
+		printf("WARNING: Cannot find windowed video mode, selecting device cancelled\n");
+		return FALSE;
 	}
 #endif
 
 	RwEngineGetVideoModeInfo(&vm, GcurSelVM);
 
 #ifdef IMPROVED_VIDEOMODE
+	if ((!FrontEndMenuManager.m_nPrefsWindowed || (vm.flags & rwVIDEOMODEEXCLUSIVE)) &&
+	    vm.width > 0 && vm.height > 0 && vm.depth > 0) {
+		FrontEndMenuManager.m_nPrefsWidth = vm.width;
+		FrontEndMenuManager.m_nPrefsHeight = vm.height;
+		FrontEndMenuManager.m_nPrefsDepth = vm.depth;
+	}
 	if (FrontEndMenuManager.m_nPrefsWindowed)
 		GcurSelVM = bestWndMode;
-
-	// Now GcurSelVM is 0 but vm has sizes(and fullscreen flag) of the video mode we want, that's why we changed the rwVIDEOMODEEXCLUSIVE conditions below
-	FrontEndMenuManager.m_nPrefsWidth = vm.width;
-	FrontEndMenuManager.m_nPrefsHeight = vm.height;
-	FrontEndMenuManager.m_nPrefsDepth = vm.depth;
 #endif
 
 #ifndef PS2_MENU
-	FrontEndMenuManager.m_nCurrOption = 0;
+	if (!useDefault)
+		FrontEndMenuManager.m_nCurrOption = 0;
 #endif
 	
 	/* Set up the video mode and set the apps window
@@ -975,8 +1011,11 @@ void _InputInitialiseJoys()
 	PSGLOBAL(joy2id) = -1;
 
 	// Load our gamepad mappings.
-#define SDL_GAMEPAD_DB_PATH "gamecontrollerdb.txt"
-	FILE *f = fopen(SDL_GAMEPAD_DB_PATH, "rb");
+	char bundledPath[FILEMGR_PATH_SIZE];
+	const char *gamepadDbPath = CFileMgr::ResolveBundledGameFile(
+		"gamecontrollerdb.txt", bundledPath, sizeof(bundledPath)) ?
+		bundledPath : "gamecontrollerdb.txt";
+	FILE *f = fcaseopen(gamepadDbPath, "rb");
 	if (f) {
 		fseek(f, 0, SEEK_END);
 		size_t fsize = ftell(f);
@@ -987,16 +1026,14 @@ void _InputInitialiseJoys()
 			db[fsize] = '\0';
 
 			if (glfwUpdateGamepadMappings(db) == GLFW_FALSE)
-				Error("glfwUpdateGamepadMappings didn't succeed, check " SDL_GAMEPAD_DB_PATH ".\n");
+				Error("glfwUpdateGamepadMappings didn't succeed, check %s.\n", gamepadDbPath);
 		} else
-			Error("fread on " SDL_GAMEPAD_DB_PATH " wasn't successful.\n");
+			Error("fread on %s wasn't successful.\n", gamepadDbPath);
 
 		free(db);
 		fclose(f);
 	} else
-		printf("You don't seem to have copied " SDL_GAMEPAD_DB_PATH " file from reVC/gamefiles to GTA: Vice City directory. Some gamepads may not be recognized.\n");
-
-#undef SDL_GAMEPAD_DB_PATH
+		printf("You don't seem to have copied %s file from reVC/gamefiles to GTA: Vice City directory. Some gamepads may not be recognized.\n", gamepadDbPath);
 
 	// But always overwrite it with the one in SDL_GAMECONTROLLERCONFIG.
 	char const* EnvControlConfig = getenv("SDL_GAMECONTROLLERCONFIG");
@@ -1031,12 +1068,22 @@ long _InputInitialiseMouse(bool exclusive)
 	// Disabled = keep cursor centered and hide
 	lastCursorMode = exclusive ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_HIDDEN;
 	glfwSetInputMode(PSGLOBAL(window), GLFW_CURSOR, lastCursorMode);
+	if (exclusive && glfwGetWindowAttrib(PSGLOBAL(window), GLFW_FOCUSED))
+		PSGLOBAL(cursorIsInWindow) = true;
 	return 0;
 }
 
 void _InputShutdownMouse()
 {
-	// Not needed
+	lastCursorMode = GLFW_CURSOR_NORMAL;
+	glfwSetInputMode(PSGLOBAL(window), GLFW_CURSOR, lastCursorMode);
+}
+
+static void
+centreMouseForDesktop()
+{
+	if (desktopWidth > 0 && desktopHeight > 0)
+		glfwSetCursorPos(PSGLOBAL(window), desktopWidth * 0.5, desktopHeight * 0.5);
 }
 
 // Not "needs exclusive" on GLFW, but more like "needs to change mode"
@@ -1087,7 +1134,9 @@ void psPostRWinit(void)
 RwBool _psSetVideoMode(RwInt32 subSystem, RwInt32 videoMode)
 {
 	RwInitialised = FALSE;
-	
+
+	_InputShutdownMouse();
+	centreMouseForDesktop();
 	RsEventHandler(rsRWTERMINATE, nil);
 	
 	GcurSel = subSystem;
@@ -1845,8 +1894,8 @@ cursorCB(GLFWwindow* window, double xpos, double ypos) {
 	
 	int winw, winh;
 	glfwGetWindowSize(PSGLOBAL(window), &winw, &winh);
-	FrontEndMenuManager.m_nMouseTempPosX = xpos * (RsGlobal.maximumWidth / winw);
-	FrontEndMenuManager.m_nMouseTempPosY = ypos * (RsGlobal.maximumHeight / winh);
+	FrontEndMenuManager.m_nMouseTempPosX = xpos * ((double)RsGlobal.maximumWidth / winw);
+	FrontEndMenuManager.m_nMouseTempPosY = ypos * ((double)RsGlobal.maximumHeight / winh);
 }
 
 void
@@ -1857,6 +1906,10 @@ cursorEnterCB(GLFWwindow* window, int entered) {
 void
 windowFocusCB(GLFWwindow* window, int focused) {
 	WindowFocused = !!focused;
+	if (!focused)
+		PSGLOBAL(cursorIsInWindow) = false;
+	else if (lastCursorMode == GLFW_CURSOR_DISABLED || glfwGetWindowAttrib(window, GLFW_HOVERED))
+		PSGLOBAL(cursorIsInWindow) = true;
 }
 
 void
@@ -2445,6 +2498,8 @@ main(int argc, char *argv[])
 	/*
 	 * Tidy up the 3D (RenderWare) components of the application...
 	 */
+	_InputShutdownMouse();
+	centreMouseForDesktop();
 	RsEventHandler(rsRWTERMINATE, nil);
 
 	/*

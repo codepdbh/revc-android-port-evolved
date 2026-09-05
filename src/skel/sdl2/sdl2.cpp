@@ -106,10 +106,14 @@ void _psCreateFolder(const char *path)
  */
 const char *_psGetUserFilesFolder()
 {
+#ifdef __APPLE__
+	return GetMacOSUserFilesFolder();
+#else
     static char szUserFiles[256];
     strcpy(szUserFiles, "userfiles");
     _psCreateFolder(szUserFiles);
     return szUserFiles;
+#endif
 }
 
 /*
@@ -617,7 +621,8 @@ psSelectDevice()
 #endif
 
 #ifndef PS2_MENU
-    FrontEndMenuManager.m_nCurrOption = 0;
+    if (!useDefault)
+        FrontEndMenuManager.m_nCurrOption = 0;
 #endif
 
     /* Set up the video mode and set the apps window
@@ -703,7 +708,10 @@ void _InputInitialiseJoys()
         char SDL_GAMEPAD_DB_PATH[MAX_PATH];
         snprintf(SDL_GAMEPAD_DB_PATH, sizeof(SDL_GAMEPAD_DB_PATH), "%s%s", pathRoot, "gamecontrollerdb.txt");
 #else
-        const char* SDL_GAMEPAD_DB_PATH = "gamecontrollerdb.txt";
+        char bundledPath[FILEMGR_PATH_SIZE];
+        const char* SDL_GAMEPAD_DB_PATH = CFileMgr::ResolveBundledGameFile(
+            "gamecontrollerdb.txt", bundledPath, sizeof(bundledPath)) ?
+            bundledPath : "gamecontrollerdb.txt";
 #endif
         if (SDL_GameControllerAddMappingsFromFile(SDL_GAMEPAD_DB_PATH) <= 0) {
             debug ("You don't seem to have copied %s file from reVC/gamefiles "

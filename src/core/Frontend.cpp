@@ -627,19 +627,8 @@ void
 CMenuManager::CentreMousePointer()
 {
 	if (SCREEN_WIDTH * 0.5f != 0.0f && 0.0f != SCREEN_HEIGHT * 0.5f) {
-#if defined RW_D3D9 || defined RWLIBS
-		tagPOINT Point;
-		Point.x = SCREEN_WIDTH / 2;
-		Point.y = SCREEN_HEIGHT / 2;
-		ClientToScreen(PSGLOBAL(window), &Point);
-		SetCursorPos(Point.x, Point.y);
-#elif defined RW_GL3 && !defined(LIBRW_SDL2)
-		glfwSetCursorPos(PSGLOBAL(window), SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2);
-#elif defined(RW_GL3) && defined(LIBRW_SDL2)
-        SDL_WarpMouseInWindow(PSGLOBAL(window), SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2);
-#endif
-		PSGLOBAL(lastMousePos.x) = SCREEN_WIDTH / 2;
-		PSGLOBAL(lastMousePos.y) = SCREEN_HEIGHT / 2;
+		RwV2d pos = { SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 };
+		RsMouseSetPos(&pos);
 	}
 }
 
@@ -4866,7 +4855,6 @@ CMenuManager::ProcessUserInput(uint8 goDown, uint8 goUp, uint8 optionSelected, u
 					DMAudio.Service();
 					CentreMousePointer();
 					m_bShowMouse = true;
-					m_nCurrOption = 5; // TODO(Miami): Because selected option is resetted after res. change. We'll need to revisit that.
 					m_nOptionHighlightTransitionBlend = 0;
 					SaveSettings();
 				}

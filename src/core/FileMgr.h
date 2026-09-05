@@ -1,10 +1,12 @@
 #ifndef __GTA_FILEMGR_H__
 #define __GTA_FILEMGR_H__
 
+#define FILEMGR_PATH_SIZE 1024
+
 class CFileMgr
 {
-	static char ms_rootDirName[128];
-	static char ms_dirName[128];
+	static char ms_rootDirName[FILEMGR_PATH_SIZE];
+	static char ms_dirName[FILEMGR_PATH_SIZE];
 public:
 	static void Initialise(void);
 	static void ChangeDir(const char *dir);
@@ -20,7 +22,13 @@ public:
 	static bool ReadLine(int fd, char *buf, int len);
 	static int CloseFile(int fd);
 	static int GetErrorReadWrite(int fd);
+	static bool ResolveBundledGameFile(const char *file, char *path, size_t pathSize);
 	static char *GetRootDirName() { return ms_rootDirName; }
 };
+
+#ifdef __APPLE__
+bool ReadGamePathFromINI(char *path, size_t pathSize);
+void WriteGamePathToINI(const char *path);
+#endif
 
 #endif // __GTA_FILEMGR_H__

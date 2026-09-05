@@ -1566,7 +1566,8 @@ psSelectDevice()
 #endif
 
 #ifndef PS2_MENU
-	FrontEndMenuManager.m_nCurrOption = 0;
+	if (!useDefault)
+		FrontEndMenuManager.m_nCurrOption = 0;
 #endif
 	
 	/* Set up the video mode and set the apps window
