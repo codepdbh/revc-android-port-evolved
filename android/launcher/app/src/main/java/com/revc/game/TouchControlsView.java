@@ -80,6 +80,17 @@ public class TouchControlsView extends View {
         int pointerId = -1;
         boolean visible = true;
 
+        // Camera stick only: a "floating" look pad instead of a fixed-center
+        // joystick -- a finger placed *anywhere* in a wide zone spawns the
+        // stick right there (mobile-style camera drag, e.g. Free Fire/PUBG
+        // Mobile), instead of requiring you to precisely find the small
+        // resting circle. Deflection from that point still behaves exactly
+        // like a normal analog stick (proportional, clamped, held = keeps
+        // turning), just anchored wherever the drag started.
+        boolean isLookPad = false;
+        RectF grabZone = new RectF(); // where a finger may land to grab this pad
+        PointF dragOrigin = new PointF(); // this drag's floating center, set on touch-down
+
         Stick(int id, String prefKey) {
             this.id = id;
             this.prefKey = prefKey;
@@ -103,6 +114,9 @@ public class TouchControlsView extends View {
 
     private final Stick leftStick = new Stick(STICK_LEFT, "L");
     private final Stick rightStick = new Stick(STICK_RIGHT, "R");
+    {
+        rightStick.isLookPad = true;
+    }
 
     // A finger that landed on empty menu space (not on the D-Pad/OK/Atras/
     // Start) acts as a direct pointer: menus support real mouse hover/click
@@ -284,6 +298,12 @@ public class TouchControlsView extends View {
         rightStick.knobRadius = baseRadius * 0.45f;
         rightStick.center.set(areaRight - margin - baseRadius, areaBottom - margin - baseRadius);
         applyStickCustomization(rightStick);
+        // Grab zone for the look pad: the whole right half of the screen, not
+        // just the small visual circle -- a finger can land anywhere there to
+        // start dragging. Buttons still win ties (checked first in
+        // handleDown), so this doesn't steal taps meant for them.
+        float midX = (areaLeft + areaRight) / 2f;
+        rightStick.grabZone.set(midX, areaTop, areaRight, areaBottom);
 
         baseLabelSize = baseRadius * 0.3f;
         labelPaint.setTextSize(baseLabelSize);
@@ -648,10 +668,16 @@ public class TouchControlsView extends View {
     }
 
     private void drawStick(Canvas canvas, Stick s) {
+        boolean active = s.pointerId != -1;
+        // A look pad's base "appears" where the drag started while active,
+        // instead of always sitting at its resting spot -- that resting
+        // circle is just a hint of where to put your thumb.
+        PointF base = (s.isLookPad && active) ? s.dragOrigin : s.center;
+
         fillPaint.setAlpha(50);
-        canvas.drawCircle(s.center.x, s.center.y, s.baseRadius, fillPaint);
-        canvas.drawCircle(s.center.x, s.center.y, s.baseRadius, strokePaint);
-        fillPaint.setAlpha(s.pointerId != -1 ? 150 : 90);
+        canvas.drawCircle(base.x, base.y, s.baseRadius, fillPaint);
+        canvas.drawCircle(base.x, base.y, s.baseRadius, strokePaint);
+        fillPaint.setAlpha(active ? 150 : 90);
         canvas.drawCircle(s.knob.x, s.knob.y, s.knobRadius, fillPaint);
     }
 
@@ -769,7 +795,11 @@ public class TouchControlsView extends View {
         }
         if (rightStick.visible && rightStick.pointerId == -1 && within(rightStick, x, y)) {
             rightStick.pointerId = pointerId;
-            updateStick(rightStick, x, y);
+            if (rightStick.isLookPad) {
+                beginLookPad(rightStick, x, y);
+            } else {
+                updateStick(rightStick, x, y);
+            }
             return;
         }
         if (currentContext == CONTEXT_MENU && menuMousePointerId == -1) {
@@ -860,15 +890,26 @@ public class TouchControlsView extends View {
     }
 
     private boolean within(Stick s, float x, float y) {
+        if (s.isLookPad) {
+            return s.grabZone.contains(x, y);
+        }
         float dx = x - s.center.x;
         float dy = y - s.center.y;
         float r = s.baseRadius * 1.25f; // generous, but buttons above now win ties anyway (see handleDown)
         return dx * dx + dy * dy <= r * r;
     }
 
+    /** Look pads only: called once, on touch-down, to spawn the floating stick at the touch point. */
+    private void beginLookPad(Stick s, float x, float y) {
+        s.dragOrigin.set(x, y);
+        s.knob.set(x, y);
+        nativeSetStick(s.id, 0f, 0f);
+    }
+
     private void updateStick(Stick s, float x, float y) {
-        float dx = x - s.center.x;
-        float dy = y - s.center.y;
+        PointF origin = s.isLookPad ? s.dragOrigin : s.center;
+        float dx = x - origin.x;
+        float dy = y - origin.y;
         float dist = (float) Math.sqrt(dx * dx + dy * dy);
         float max = s.baseRadius;
 
@@ -877,7 +918,7 @@ public class TouchControlsView extends View {
             dy = dy / dist * max;
         }
 
-        s.knob.set(s.center.x + dx, s.center.y + dy);
+        s.knob.set(origin.x + dx, origin.y + dy);
         nativeSetStick(s.id, dx / max, dy / max);
     }
 }

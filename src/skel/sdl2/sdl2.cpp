@@ -31,7 +31,6 @@ long _dwOperatingSystemVersion;
 #include "AnimViewer.h"
 #include "Font.h"
 #include "MemoryMgr.h"
-#include "Camera.h"
 
 #if defined ANDROID
 #include <jni.h>
@@ -1910,15 +1909,6 @@ void CaptureTouchPad(RwInt32 padID)
     ControlsManager.m_NewState.numButtons = SDL_CONTROLLER_BUTTON_MAX - 1;
     ControlsManager.m_NewState.id = -1;
     ControlsManager.m_NewState.isGamepad = true;
-
-    // m_bUseMouse3rdPerson defaults to true (Camera.cpp) and gets set from
-    // whatever "Control Method" is configured (Frontend.cpp), meaning it's
-    // often true even here where there is no mouse at all. PlayerPed.cpp's
-    // ProcessControl() gates the entire target-lock/auto-aim system behind
-    // "!m_bUseMouse3rdPerson", assuming a PC mouse user aims freely instead
-    // -- so R1/APUNTAR silently did nothing regardless of button state.
-    // Force it off every frame so a menu visit can't flip it back.
-    CCamera::m_bUseMouse3rdPerson = false;
 
     memset(ControlsManager.m_NewState.mappedButtons, 0, sizeof(ControlsManager.m_NewState.mappedButtons));
     ControlsManager.m_NewState.mappedButtons[SDL_CONTROLLER_BUTTON_B]           = g_TouchState.circle;

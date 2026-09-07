@@ -1416,15 +1416,27 @@ CPlayerPed::ProcessPlayerWeapon(CPad *padUsed)
 	}
 #endif
 
+#if defined ANDROID
+	// m_bUseMouse3rdPerson doubles as "free camera look is active" for both
+	// mouse (PC) *and* the right stick (see Cam.cpp), so it can't just be
+	// forced off globally -- that fixes target-lock but breaks right-stick
+	// camera look, which needs it on. There is no mouse here at all, so
+	// only the mouse-specific meaning of the flag is wrong on Android;
+	// override it just for this target-lock gate, not the real flag.
+	const bool usingMouse3rdPerson = false;
+#else
+	const bool usingMouse3rdPerson = CCamera::m_bUseMouse3rdPerson;
+#endif
+
 	if (padUsed->GetTarget() && m_nSelectedWepSlot == m_currentWeapon && m_nMoveState != PEDMOVE_SPRINT && !TheCamera.Using1stPersonWeaponMode() && weaponInfo->IsFlagSet(WEAPONFLAG_CANAIM)) {
 		if (m_pPointGunAt) {
 			// what??
 			if (!m_pPointGunAt
 #ifdef FREE_CAM
-				|| (!CCamera::bFreeCam && CCamera::m_bUseMouse3rdPerson)
+				|| (!CCamera::bFreeCam && usingMouse3rdPerson)
 #else
-				|| CCamera::m_bUseMouse3rdPerson
-#endif		
+				|| usingMouse3rdPerson
+#endif
 			) {
 				ClearWeaponTarget();
 				return;
@@ -1457,7 +1469,7 @@ CPlayerPed::ProcessPlayerWeapon(CPad *padUsed)
 			TheCamera.SetNewPlayerWeaponMode(CCam::MODE_SYPHON, 0, 0);
 			TheCamera.UpdateAimingCoors(m_pPointGunAt->GetPosition());
 
-		} else if (!CCamera::m_bUseMouse3rdPerson) {
+		} else if (!usingMouse3rdPerson) {
 			if (padUsed->TargetJustDown() || TheCamera.m_bJustJumpedOutOf1stPersonBecauseOfTarget)
 				FindWeaponLockOnTarget();
 		}
