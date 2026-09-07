@@ -11,6 +11,107 @@ Audio is done with MSS (using dlls from original GTA) or OpenAL.
 
 We cannot build for PS2 or Xbox yet. If you're interested in doing so, get in touch with us.
 
+---
+
+## 📱 Sobre este fork: revc-android-port-evolved
+
+Este fork ([codepdbh/revc-android-port-evolved](https://github.com/codepdbh/revc-android-port-evolved)) toma el
+puerto Android de reVC —que existía en el repo original pero nunca había llegado a arrancar realmente— y lo deja
+jugable de punta a punta: compila, carga tus assets, guarda partidas, y tiene controles táctiles completos con
+el mapeo real de botones del juego.
+
+**Descargas:** los APK compilados están en [Releases](https://github.com/codepdbh/revc-android-port-evolved/releases),
+no hace falta compilar nada para jugar.
+
+### ✅ Arreglos aplicados
+
+El puerto Android tenía el andamiaje armado (CMake, clases Java, wiring de librerías) pero varias piezas clave
+nunca se habían terminado de conectar, así que nada de esto funcionaba en la práctica hasta ahora:
+
+- **El build de Android no compilaba nada real.** El `add_subdirectory()` que trae el motor del juego estaba
+  comentado en el CMake de la app — el APK se armaba pero sin ningún código del juego adentro.
+- **Vendor libs (SDL2/OpenAL/mpg123) sin conectar.** El archivo que debía wirearlas para Android
+  (`cmake/android/AndroidConfig.cmake`) estaba vacío.
+- **arm64-v8a deshabilitado.** Solo compilaba para `armeabi-v7a` (32-bit), que los celulares modernos
+  (Snapdragon 8 Elite y similares) ya ni soportan — el APK no cargaba ninguna librería en esos dispositivos.
+- **Crash garantizado en cualquier señal en armeabi-v7a**: un macro (`ANDROID_x32`) que decide el layout de
+  registros de CPU para el crash handler nunca se definía, así que siempre usaba el layout de 64-bit incluso
+  compilando para 32-bit.
+- **Ruta de assets poco práctica.** El motor esperaba los archivos del juego en `Android/data/…`, una carpeta
+  que un usuario normal no encuentra. Ahora se leen desde `Almacenamiento interno/reVC`, una carpeta plana y
+  visible en cualquier explorador de archivos.
+- **Permiso "Todos los archivos" nunca solicitado en tiempo de ejecución**, pese a estar declarado en el manifest.
+- **La orientación volvía a vertical sola.** SDL fija su propia orientación al crear la ventana (independiente
+  del manifest) usando un hint que nunca se seteaba.
+- **El idioma (español) no se podía configurar.** `reVC.ini` se abría con una ruta relativa que en Android
+  resuelve contra `/` (no escribible), y además se construía como variable global *antes* de que la ruta de
+  almacenamiento estuviera disponible.
+- **El menú principal no respondía a los controles táctiles.** Faltaba disparar `RsPadEventHandler`, el paso
+  que realmente traduce un botón presionado en navegación de menú o acción de juego — los toques nunca llegaban
+  a ningún lado.
+- **Ningún botón de gameplay hacía nada** (correr, saltar, disparar, etc.), incluso ya con el menú funcionando:
+  la tabla que dice "qué acción hace cada botón" solo se llena cuando el juego detecta un **gamepad físico**
+  conectándose (evento `SDL_JOYDEVICEADDED`), algo que un control 100% virtual nunca dispara.
+- **El botón de "atrás" en el menú no hacía nada**: estaba mapeado a Círculo, pero este juego usa **Triángulo**
+  para volver atrás (`TRIANGLE_BACK_BUTTON`).
+- **El auto-apuntado / target-lock (R1) no hacía nada**, incluso con arma equipada: una bandera pensada para
+  detectar "el jugador está mirando con el mouse" (`CCamera::m_bUseMouse3rdPerson`) viene en `true` por defecto,
+  y como en Android no hay mouse, bloqueaba todo el sistema de auto-apuntado. (Ojo: esa misma bandera también
+  controla la cámara con el stick derecho — un primer intento de arreglarla globalmente rompió la cámara al
+  mismo tiempo; la solución final es puntual, solo para el chequeo de apuntado.)
+- **El guardado de partidas no funcionaba.** La carpeta de guardado (`userfiles`) nunca se creaba: dependía de
+  la misma variable de ruta que nunca se asignaba (`StorageRootBuffer`), más una barra `/` faltante al armar
+  la ruta final.
+- **El minimapa tapaba el joystick de movimiento** (ambos en la esquina inferior izquierda). Movido a la
+  esquina superior izquierda, solo en Android.
+- **Botones táctiles superpuestos entre sí** en varios layouts (matemática de espaciado incorrecta), y algunas
+  etiquetas largas ("DISPARAR", "APUNTAR") se salían del botón y tapaban al de al lado.
+- **Controles tapados por el recorte de cámara** del teléfono en horizontal (el notch puede caer a la izquierda
+  o a la derecha según la rotación) — ahora se lee el área segura real (`DisplayCutout`) y todo se acomoda.
+
+### ✨ Mejoras / features nuevas
+
+- **Controles táctiles completos**, con el mapeo **real** del juego (investigado desde el código, no
+  inventado): Círculo = disparar, Cruz = acelerar/correr, Cuadrado = frenar/saltar, Triángulo = entrar/salir
+  del vehículo, R1 = apuntar/freno de mano, L1 = teléfono/radio, L2/R2 = cambiar de arma o mirar a los costados,
+  Select = cambiar cámara, L3 = bocina/agacharse, D-Pad = navegación de menú.
+- **Layouts adaptados según contexto**, detectado en vivo desde el motor: menú, a pie, en vehículo, cutscene.
+  Cada uno muestra solo los controles que tienen sentido ahí (p. ej. pedales de GAS/FRENO grandes al manejar,
+  D-Pad + confirmar/cancelar en el menú, un único botón de SALTAR ESCENA durante cutscenes).
+- **Cámara como panel flotante estilo mobile** (al estilo Free Fire/PUBG Mobile): tocás en cualquier lugar de
+  la mitad derecha de la pantalla y el stick de cámara "nace" ahí mismo, en vez de tener que acertarle a un
+  círculo fijo con el pulgar libre.
+- **Toque directo en menús**: además del D-Pad, se puede tocar un ítem del menú directamente (el motor ya
+  soporta mouse/hover para esto, solo había que alimentarlo con la posición del toque).
+- **Auto-ocultar controles táctiles** al conectar un gamepad físico (USB/Bluetooth), y reaparecen si se
+  desconecta.
+- **Editor de controles en el juego**: un botón (⚙, abajo al centro) activa un modo donde se puede arrastrar
+  cualquier control para reposicionarlo y agrandarlo/achicarlo (0.5x–1.8x) con botones +/-. Se guarda
+  automáticamente por contexto (a pie, vehículo, etc.) y persiste entre reinicios.
+- **Salto de cutscenes fiable**: en vez de simular la tecla que el juego chequea (frágil, dependía de varias
+  condiciones internas coincidiendo en el mismo frame), el botón SALTAR llama directamente a la función de
+  saltar cutscene, salvo en la escena final (que sigue sin poder saltarse, como en el juego original).
+- Ícono de la app propio.
+
+### 📋 Por hacer / ideas pendientes
+
+- [ ] Confirmar guardado de partidas de punta a punta jugando hasta un punto de guardado real (la carpeta ya
+      se crea correctamente; falta verificar un save/load completo).
+- [ ] Probar a fondo el auto-ocultado de controles con un gamepad físico real.
+- [ ] Afinar tamaños/posiciones por defecto de los controles según feedback de uso real (el editor en juego
+      ayuda, pero un layout inicial más pulido reduce cuánto hay que retocar).
+- [ ] Vibración/haptic feedback al presionar botones táctiles.
+- [ ] Revisar el comportamiento en aspect ratios de pantalla poco comunes (plegables, tablets).
+- [ ] Sumar más gamepads Bluetooth "raros" a la detección (ahora mismo se apoya en `SDL_GameController`, que
+      cubre la gran mayoría).
+- [ ] Considerar exponer algunas opciones del editor de controles (sensibilidad de sticks, deadzone) desde la
+      propia UI en vez de solo vía `reVC.ini`.
+- [ ] **Aplicar el mismo trabajo a [reLCS](https://github.com/GTAmodding/re3)/re3 (GTA III)** — mismo patrón de
+      bugs es esperable ahí (build de Android sin terminar, rutas de almacenamiento, controles táctiles), así
+      que este mismo enfoque debería trasladarse casi directo.
+
+---
+
 ## Installation
 
 - reVC requires game assets to work, so you **must** own [a copy of GTA Vice City](https://store.steampowered.com/app/12110/Grand_Theft_Auto_Vice_City/).
@@ -20,7 +121,8 @@ We cannot build for PS2 or Xbox yet. If you're interested in doing so, get in to
   - [Windows OpenGL 64bit](https://nightly.link/mrxenginner/reVC/workflows/reVC_msvc_amd64/miami/reVC_Release_win-amd64-librw_gl3_glfw-oal.zip)
   - [Linux 64bit](https://nightly.link/mrxenginner/reVC/workflows/build-cmake-conan/miami/ubuntu-18.04-gl3.zip)
   - [MacOS 64bit x86-64](https://nightly.link/mrxenginner/reVC/workflows/build-cmake-conan/miami/macos-latest-gl3.zip)
-  - [Android armeabi-v7a and arm64-v8a](https://nightly.link/mrxenginner/reVC/workflows/build-android/miami/revc-release.zip)
+  - [Android armeabi-v7a and arm64-v8a](https://nightly.link/mrxenginner/reVC/workflows/build-android/miami/revc-release.zip) — build del proyecto original, sin los arreglos de este fork
+  - **Android (este fork, recomendado):** [últimos releases](https://github.com/codepdbh/revc-android-port-evolved/releases) — APK ya compilado, con todos los arreglos y controles táctiles de la sección de arriba
   
 - Extract the downloaded zip over your GTA VC directory and run reVC. The zip includes the binary, updated and additional gamefiles and in case of OpenAL the required dlls.
 
