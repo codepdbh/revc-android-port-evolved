@@ -161,6 +161,7 @@ struct sRadarTraceSave
 // Values for screen space
 #define RADAR_LEFT (40.0f)
 #define RADAR_BOTTOM (40.0f)
+#define RADAR_TOP (40.0f) // top-left placement (Android touch controls sit bottom-left, radar used to overlap them there)
 
 #ifdef FIX_RADAR
 /*

@@ -33,6 +33,7 @@ long _dwOperatingSystemVersion;
 #include "MemoryMgr.h"
 
 #if defined ANDROID
+#include <jni.h>
 #include "JavaWrapper.h"
 #include "TouchControls.h"
 extern char* StorageRootBuffer;
@@ -84,7 +85,7 @@ void _psCreateFolder(const char *path)
 #if defined(ANDROID)
 	const char* pathroot = StorageRootBuffer;
 	char dbPath[1024];
-	snprintf(dbPath, sizeof(dbPath), "%s%s", pathroot, path);
+	snprintf(dbPath, sizeof(dbPath), "%s/%s", pathroot, path);
 	mkdir(dbPath, 0755);
 	debug("Creating Folder Path: %s", dbPath);
 #else
@@ -1354,6 +1355,16 @@ main(int argc, char *argv[])
         if(strcmp(argv[i], "--dir") == 0 && i + 1 < argc) {
             const char *gamePath = argv[i+1];
             setenv("STORAGE_ROOT", gamePath, 1);
+#if defined ANDROID
+            // StorageRootBuffer is only ever assigned inside setGamePath()
+            // (AndroidMain.cpp), a JNI entry point nothing on this launcher
+            // actually calls -- so on Android it stayed NULL forever,
+            // breaking every one of its other readers (save files via
+            // _psCreateFolder() below, and the crash/debug logger in
+            // skel/android/logger/log.cpp), independently of the
+            // STORAGE_ROOT env var fallback CdStream_posix.cpp already had.
+            StorageRootBuffer = getenv("STORAGE_ROOT");
+#endif
         }
     }
 
@@ -1868,6 +1879,16 @@ RwV2d leftStickPos;
 RwV2d rightStickPos;
 
 #if defined ANDROID
+// Polled from TouchControlsView (Java) to auto-hide the virtual controls
+// once a real gamepad takes over pad 0 -- gamepad1 is exactly the
+// SDL_GameController CaptureTouchPad()'s caller (CapturePad() below) yields
+// to when one is actually connected.
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_revc_game_TouchControlsView_nativeIsControllerConnected(JNIEnv *env, jobject obj)
+{
+    return gamepad1 != nullptr;
+}
+
 // Feeds the on-screen touch controls (TouchControls.cpp/TouchControlsView.java)
 // into the same CControllerState/PCTempJoyState a physical SDL_GameController
 // would, so every context that already handles gamepad input (driving, on

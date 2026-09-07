@@ -39,6 +39,7 @@ public class TouchControlsView extends View {
     private static native void nativeSetMenuMouse(float x, float y, boolean down);
     private static native void nativeSkipCutscene();
     private static native int nativeGetGameContext(); // 0 = menu, 1 = on foot, 2 = in vehicle
+    private static native boolean nativeIsControllerConnected();
 
     private static final int STICK_LEFT = 0;
     private static final int STICK_RIGHT = 1;
@@ -159,11 +160,30 @@ public class TouchControlsView extends View {
         @Override
         public void run() {
             int ctx;
+            boolean controllerConnected;
             try {
                 ctx = nativeGetGameContext();
+                controllerConnected = nativeIsControllerConnected();
             } catch (UnsatisfiedLinkError e) {
                 ctx = currentContext; // native lib not ready yet, keep current layout
+                controllerConnected = false;
             }
+
+            // A real gamepad drives pad 0 directly the moment it's connected
+            // (see CapturePad() in sdl2.cpp) -- the virtual controls would
+            // just be redundant clutter on screen, or worse, fight the
+            // physical stick if a finger is still resting on one.
+            boolean shouldShow = !controllerConnected;
+            if (shouldShow != (getVisibility() == VISIBLE)) {
+                if (!shouldShow) {
+                    releaseAllInput();
+                    editMode = false;
+                    selectedButton = null;
+                    selectedStick = null;
+                }
+                setVisibility(shouldShow ? VISIBLE : GONE);
+            }
+
             if (ctx != currentContext) {
                 currentContext = ctx;
                 releaseAllInput();
