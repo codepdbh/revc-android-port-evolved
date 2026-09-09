@@ -21,6 +21,29 @@ android {
         ndk {
             abiFilters "armeabi-v7a", "arm64-v8a"
         }
+
+        // Name of the game-files folder under internal storage (Environment.
+        // getExternalStorageDirectory()), read by GameActivity.GAME_FOLDER_NAME.
+        buildConfigField "String", "GAME_FOLDER_NAME", "\"reVC\""
+    }
+
+    // Separate mod "editions": each one is its own installable app (own
+    // applicationId, so it installs side by side with the standard one
+    // instead of replacing it) pointed at its own folder under internal
+    // storage, so a mod's files never have to be mixed into -- or overwrite
+    // anything in -- the same folder as an unmodified install.
+    flavorDimensions = ["edition"]
+    productFlavors {
+        standard {
+            dimension "edition"
+            // Inherits applicationId/GAME_FOLDER_NAME from defaultConfig as-is.
+        }
+        longnight {
+            dimension "edition"
+            applicationIdSuffix ".longnight"
+            versionNameSuffix "-longnight"
+            buildConfigField "String", "GAME_FOLDER_NAME", "\"reVC-LongNight\""
+        }
     }
 
     buildTypes {
@@ -61,6 +84,10 @@ android {
     packagingOptions {
         jniLibs.excludes += ['META-INF/*']
         resources.excludes += ['META-INF/*']
+        // jniDebuggable alone still lets AGP strip DWARF line info on some
+        // versions -- force-keep full debug symbols so addr2line can resolve
+        // exact source lines from a device tombstone, not just function names.
+        jniLibs.keepDebugSymbols += ['**/*.so']
     }
 
     compileOptions {
