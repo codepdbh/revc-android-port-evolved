@@ -38,10 +38,18 @@ enum Config {
 	NUMENTRYINFOS = 3200,
 	NUMPEDS = 140,
 	NUMVEHICLES = 110,
-	NUMBUILDINGS = 7000,
+	// Bumped from the original 7000/2340 -- some total-conversion mods (e.g.
+	// GTA Long Night, whose own installer config asks for Buildings=8000/
+	// Dummys=4000 by patching the PC exe's pools directly) need more than
+	// vanilla Vice City ever does. That patching only ever applied to the
+	// real exe anyway -- this reimplementation's pools are these fixed
+	// compile-time sizes regardless, so headroom has to come from here.
+	// Harmless for vanilla VC: unused slots in an array of structs, not
+	// preallocated textures/geometry.
+	NUMBUILDINGS = 8500,
 	NUMTREADABLES = 1,
 	NUMOBJECTS = 460,
-	NUMDUMMIES = 2340,
+	NUMDUMMIES = 4500,
 	NUMAUDIOSCRIPTOBJECTS = 192,
 	NUMCOLMODELS = 4400,
 	NUMCUTSCENEOBJECTS = 50,	// not a pool in VC

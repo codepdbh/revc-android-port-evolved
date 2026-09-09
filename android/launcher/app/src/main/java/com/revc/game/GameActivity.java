@@ -34,8 +34,13 @@ import java.io.File;
  */
 public class GameActivity extends SDLActivity {
 
-    /** Nombre de la carpeta con los archivos del juego, en la raíz del almacenamiento interno. */
-    public static final String GAME_FOLDER_NAME = "reVC";
+    /**
+     * Nombre de la carpeta con los archivos del juego, en la raíz del almacenamiento
+     * interno. Viene de BuildConfig (ver productFlavors en build.gradle) para que
+     * cada edición (standard, longnight, ...) use su propia carpeta sin tocar la
+     * de las demás -- son apps instaladas por separado (applicationId distinto).
+     */
+    public static final String GAME_FOLDER_NAME = BuildConfig.GAME_FOLDER_NAME;
 
     private static final int REQUEST_LEGACY_STORAGE_PERMISSION = 1001;
 

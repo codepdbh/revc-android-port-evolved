@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Overrides app/src/main/res/values/strings.xml's app_name for this flavor only,
+         so the two apps are told apart on the home screen/app switcher. -->
+    <string name="app_name">reVC: Long Night</string>
+</resources>
