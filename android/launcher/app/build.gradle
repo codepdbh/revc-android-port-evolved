@@ -11,8 +11,8 @@ android {
         applicationId "com.revc.game"
         minSdk 24
         targetSdk 35
-        versionCode 3
-        versionName "1.0.2"
+        versionCode 4
+        versionName "1.0.3"
 
         ndkVersion '27.2.12479018'
 

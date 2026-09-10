@@ -68,6 +68,11 @@ nunca se habían terminado de conectar, así que nada de esto funcionaba en la p
   etiquetas largas ("DISPARAR", "APUNTAR") se salían del botón y tapaban al de al lado.
 - **Controles tapados por el recorte de cámara** del teléfono en horizontal (el notch puede caer a la izquierda
   o a la derecha según la rotación) — ahora se lee el área segura real (`DisplayCutout`) y todo se acomoda.
+- **No se podía pausar manejando.** El botón de pausa (Start) nunca se posicionaba en el layout de vehículo —
+  no faltaba un mapeo, directamente el botón no existía en pantalla mientras conducías.
+- **El botón de cámara (CAM) se superponía al minimapa** y se veía estirado/ovalado en vez de redondo (su
+  hitbox era un rectángulo ancho, no un círculo). Movido a un costado, fuera del área del radar, y ahora
+  circular como el resto de los botones.
 
 ### ✨ Mejoras / features nuevas
 
@@ -92,6 +97,9 @@ nunca se habían terminado de conectar, así que nada de esto funcionaba en la p
   condiciones internas coincidiendo en el mismo frame), el botón SALTAR llama directamente a la función de
   saltar cutscene, salvo en la escena final (que sigue sin poder saltarse, como en el juego original).
 - Ícono de la app propio.
+- **Controles con íconos en vez de texto**: los 13 botones que antes mostraban una palabra en español
+  (CORRER, SALTAR, DISPARAR, SUBIR, SALIR, TEL, APUNTAR, CAM, GAS, FRENO, FRENO MANO, RADIO, BOCINA) ahora
+  muestran un gráfico propio en su lugar — más rápido de reconocer de un vistazo, y no depende del idioma.
 
 ### 📋 Por hacer / ideas pendientes
 
