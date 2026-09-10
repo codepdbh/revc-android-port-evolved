@@ -1,6 +1,12 @@
 find_package(Threads REQUIRED)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 
+# Off by default: only the Android "longnight" build flavor turns this on
+# (via -DREVC_LONGNIGHT_POOLS=ON in its externalNativeBuild.cmake.arguments,
+# see android/launcher/app/build.gradle) to get the bigger CPools some
+# total-conversion mods need -- see the LONGNIGHT_POOLS comment in config.h.
+option(REVC_LONGNIGHT_POOLS "Bump CPools sizes for large total-conversion mods (e.g. GTA Long Night)" OFF)
+
 file(GLOB_RECURSE ${PROJECT}_SOURCES "*.cpp" "*.h" "*.rc")
 
 function(header_directories RETURN_LIST)
@@ -83,6 +89,9 @@ if(ANDROID)
             HAVE_EFFICIENT_UNALIGNED_ACCESS
             VECTORIZE_SINCOS
         )
+    if(REVC_LONGNIGHT_POOLS)
+        target_compile_definitions(${EXECUTABLE} PRIVATE LONGNIGHT_POOLS)
+    endif()
 else()
     target_compile_definitions(${EXECUTABLE} PRIVATE CMAKE_BUILD)
     target_compile_definitions(${EXECUTABLE} PRIVATE USE_OUR_VERSIONING)

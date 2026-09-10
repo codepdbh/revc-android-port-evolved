@@ -38,10 +38,27 @@ enum Config {
 	NUMENTRYINFOS = 3200,
 	NUMPEDS = 140,
 	NUMVEHICLES = 110,
+	// Some total-conversion mods (e.g. GTA Long Night, whose own installer
+	// config asks for Buildings=8000/Dummys=4000 by patching the PC exe's
+	// pools directly) need more than vanilla Vice City ever does. That
+	// patching only ever applied to the real exe anyway -- this
+	// reimplementation's pools are these fixed compile-time sizes
+	// regardless, so headroom has to come from here. LONGNIGHT_POOLS is
+	// only defined for the "longnight" Android build flavor (see
+	// build.gradle) -- the plain vanilla app has no reason to carry the
+	// extra memory these bigger arrays cost just to sit unused.
+#ifdef LONGNIGHT_POOLS
+	NUMBUILDINGS = 8500,
+#else
 	NUMBUILDINGS = 7000,
+#endif
 	NUMTREADABLES = 1,
 	NUMOBJECTS = 460,
+#ifdef LONGNIGHT_POOLS
+	NUMDUMMIES = 4500,
+#else
 	NUMDUMMIES = 2340,
+#endif
 	NUMAUDIOSCRIPTOBJECTS = 192,
 	NUMCOLMODELS = 4400,
 	NUMCUTSCENEOBJECTS = 50,	// not a pool in VC

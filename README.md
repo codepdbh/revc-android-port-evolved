@@ -73,6 +73,10 @@ nunca se habían terminado de conectar, así que nada de esto funcionaba en la p
 - **El botón de cámara (CAM) se superponía al minimapa** y se veía estirado/ovalado en vez de redondo (su
   hitbox era un rectángulo ancho, no un círculo). Movido a un costado, fuera del área del radar, y ahora
   circular como el resto de los botones.
+- **Gasto de memoria innecesario en la app normal.** Los límites de memoria del motor (`NUMBUILDINGS`/
+  `NUMDUMMIES` en `config.h`) que se subieron para soportar mods como GTA Long Night quedaban aplicados
+  también a la app sin modificar, sin necesitarlo. Ahora son condicionales (`LONGNIGHT_POOLS`, activado solo
+  en el flavor de Gradle correspondiente) — la app normal vuelve a usar los valores originales.
 
 ### ✨ Mejoras / features nuevas
 
@@ -100,6 +104,30 @@ nunca se habían terminado de conectar, así que nada de esto funcionaba en la p
 - **Controles con íconos en vez de texto**: los 13 botones que antes mostraban una palabra en español
   (CORRER, SALTAR, DISPARAR, SUBIR, SALIR, TEL, APUNTAR, CAM, GAS, FRENO, FRENO MANO, RADIO, BOCINA) ahora
   muestran un gráfico propio en su lugar — más rápido de reconocer de un vistazo, y no depende del idioma.
+
+### ⚠️ Problemas conocidos
+
+- **Crash al iniciar una partida nueva en GPUs Samsung Xclipse (Exynos) recientes.** El menú funciona, la
+  cinemática de apertura arranca, y el juego se cierra justo al terminar de cargar. Investigado a fondo:
+  - No es falta de memoria del sistema ni un bug de nuestro código — se midió en vivo con `dumpsys meminfo`:
+    la categoría **"Graphics"** del proceso pasa de ~60MB a **4+ GB en pocos segundos**, mientras que el conteo
+    real de texturas/buffers de RenderWare (medido directamente en el motor) se mantiene estable en todo
+    momento.
+  - La causa es **ANGLE**, la capa de Google que traduce OpenGL ES a Vulkan — el único driver gráfico
+    disponible en el Xclipse 530 de este chip (no hay driver OpenGL nativo al que volver). El log de ANGLE
+    reporta `BLOB CACHE IS DISABLED DUE TO LACK OF MULTIFILE BLOBCACHE SUPPORT`: sin ese cache, cada
+    combinación distinta de material/shader que aparece en la cinemática de apertura (que tiene varias) le
+    fuerza a ANGLE a crear un objeto de pipeline de Vulkan nuevo, sin reutilizar ni liberar los anteriores.
+  - Confirmado que forzar el driver "nativo" por configuración (`adb shell settings put global
+    angle_gl_driver_selection_pkgs/values`) no cambia nada — este chip no tiene otro driver, ANGLE siempre se
+    usa.
+  - **No reproducible en Snapdragon/Adreno** (probado extensamente en un Galaxy S25 Ultra) — Adreno usa su
+    propio driver OpenGL nativo, sin pasar por ANGLE.
+  - Arreglo de fondo pendiente: reducir la cantidad de combinaciones distintas de material/shader que se usan
+    durante la cinemática de apertura, para que ANGLE tenga menos pipelines que crear. Es un trabajo de
+    renderizado sustancial, no un parche rápido — documentado acá para no perder el diagnóstico.
+  - **Mientras tanto**: cargar una partida guardada en vez de empezar una nueva evita el problema por completo
+    (no dispara la cinemática de apertura).
 
 ### 📋 Por hacer / ideas pendientes
 
