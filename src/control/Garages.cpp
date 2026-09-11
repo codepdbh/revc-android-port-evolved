@@ -203,8 +203,13 @@ void CGarages::Update(void)
 int16 CGarages::AddOne(float X1, float Y1, float Z1, float X2, float Y2, float X3, float Y3, float Z2, uint8 type, int32 targetId)
 {
 	if (NumGarages >= NUM_GARAGES) {
-		assert(0);
-		return NumGarages++;
+		// A script asking for more garages than we have room for used to
+		// be a hard crash here (assert() in this codebase always aborts,
+		// it's not a disabled release-build no-op) -- degrade gracefully
+		// instead: refuse the extra garage and hand back the last valid
+		// slot rather than an index nothing else can use.
+		debug("CGarages::AddOne: NumGarages >= NUM_GARAGES (%d), ignoring extra garage\n", NUM_GARAGES);
+		return NUM_GARAGES - 1;
 	}
 	CGarage* pGarage = &aGarages[NumGarages];
 	pGarage->m_fInfX = Min(Min(Min(X1, X2), X3), X2 + X3 - X1);
@@ -292,7 +297,15 @@ int16 CGarages::AddOne(float X1, float Y1, float Z1, float X2, float Y2, float X
 		pGarage->m_fDoorPos = HALFPI;
 		break;
 	default:
-		assert(false);
+		// A garage type this engine doesn't know (e.g. a mod script's own
+		// custom garage type, like a vehicle-tuning garage) used to be a
+		// hard crash here. Fall back to a plain closed garage instead of
+		// aborting -- it won't get that garage type's special behaviour,
+		// but the game keeps running.
+		debug("CGarages::AddOne: unknown garage type %d, treating as GARAGE_MISSION\n", type);
+		pGarage->m_eGarageState = GS_FULLYCLOSED;
+		pGarage->m_fDoorPos = 0.0f;
+		break;
 	}
 	if (type == GARAGE_CRUSHER)
 		pGarage->UpdateCrusherAngle();

@@ -828,6 +828,12 @@ void CRadar::DrawRadarSprite(uint16 sprite, float x, float y, uint8 alpha)
 #ifdef MAP_ENHANCEMENTS
 	if(sprite == RADAR_SPRITE_WAYPOINT) alpha = 255;
 #endif
+	// A blip/icon id this engine doesn't know (e.g. a mod script asking
+	// for its own new radar icon type) used to index RadarSprites[] out
+	// of bounds and crash on whatever garbage pointer it found. Just
+	// don't draw an icon for it instead.
+	if(sprite >= RADAR_SPRITE_COUNT)
+		return;
 	RadarSprites[sprite]->Draw(CRect(x - SCREEN_SCALE_X(8.0f), y - SCREEN_SCALE_Y(8.0f), x + SCREEN_SCALE_X(8.0f), y + SCREEN_SCALE_Y(8.0f)), CRGBA(255, 255, 255, alpha));
 
 	if (FrontEndMenuManager.m_bMenuMapActive) {

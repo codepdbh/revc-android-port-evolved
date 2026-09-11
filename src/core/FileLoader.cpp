@@ -1232,14 +1232,21 @@ CFileLoader::LoadObjectInstance(const char *line)
 		CWorld::Add(entity);
 
 		CColModel *col = entity->GetColModel();
-		if(col->numSpheres || col->numBoxes || col->numTriangles){
-			if(col->level != 0)
-				CColStore::GetBoundingBox(col->level).ContainRect(entity->GetBoundRect());
-		}else
+		// A model with no collision data at all (m_colModel never set --
+		// e.g. its COLFILE never loaded) is a legitimate case the engine
+		// already anticipates elsewhere; this just didn't check for it.
+		if(col == nil)
 			entity->bUsesCollision = false;
+		else{
+			if(col->numSpheres || col->numBoxes || col->numTriangles){
+				if(col->level != 0)
+					CColStore::GetBoundingBox(col->level).ContainRect(entity->GetBoundRect());
+			}else
+				entity->bUsesCollision = false;
 
-		if(entity->GetPosition().z + col->boundingBox.min.z < 6.0f)
-			entity->bUnderwater = true;
+			if(entity->GetPosition().z + col->boundingBox.min.z < 6.0f)
+				entity->bUnderwater = true;
+		}
 	}else{
 		entity = new CDummyObject;
 		entity->SetModelIndexNoCreate(id);

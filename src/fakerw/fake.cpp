@@ -304,10 +304,22 @@ void _rwD3D8TexDictionaryEnableRasterFormatConversion(bool enable) { }
 RwBool rwNativeTextureHackRead(RwStream *stream, RwTexture **tex, RwInt32 size)
 {
 	*tex = Texture::streamReadNative(stream);
+	if(*tex == nil)
+		return false;
 #ifdef LIBRW
 	(*tex)->raster = rw::Raster::convertTexToCurrentPlatform((*tex)->raster);
+	// convertTexToCurrentPlatform() can come back nil for a raster it
+	// doesn't know how to convert (some malformed/unsupported third-party
+	// texture) -- report this texture as failed instead of handing back
+	// one with a nil raster, which would crash the first time anything
+	// tries to use it (e.g. writing the video-card-native TXD cache).
+	if((*tex)->raster == nil){
+		(*tex)->destroy();
+		*tex = nil;
+		return false;
+	}
 #endif
-	return *tex != nil;
+	return true;
 }
 
 
@@ -592,6 +604,8 @@ RwVideoMode *RwEngineGetVideoModeInfo(RwVideoMode *modeinfo, RwInt32 modeIndex)
 	{ return Engine::getVideoModeInfo(modeinfo, modeIndex); }
 RwInt32 RwEngineGetCurrentVideoMode(void) { return Engine::getCurrentVideoMode(); }
 RwBool RwEngineSetVideoMode(RwInt32 modeIndex) { return Engine::setVideoMode(modeIndex); }
+RwInt32 RwEngineGetRenderScale(void) { return Engine::getRenderScale(); }
+RwBool RwEngineSetRenderScale(RwInt32 percent) { return Engine::setRenderScale(percent); }
 RwInt32 RwEngineGetTextureMemorySize(void);
 RwInt32 RwEngineGetMaxTextureSize(void);
 

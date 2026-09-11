@@ -519,6 +519,13 @@ public class TouchControlsView extends View {
         b(BTN_R1).label = "APUNTAR";
         b(BTN_R1).icon = icAim;
 
+        // Duck (L3 -- CPad::DuckJustDown() reads LeftShock, the left stick
+        // click). Was never placed on foot at all, so there was no way to
+        // agacharse. Same spot layoutVehicle() already uses for L3/horn:
+        // centered above the L1/L2/R1/R2 row.
+        placeCircle(BTN_L3, leftStick.center.x, rowY - shR * 2.2f, shR);
+        b(BTN_L3).label = "AGACHAR";
+
         // Select (camera view), top area but clear of the radar (top-left,
         // see RADAR_LEFT/TOP/WIDTH/HEIGHT in Radar.h -- roughly the left 21%
         // of the screen). Round, like every other icon button now, instead
@@ -568,6 +575,17 @@ public class TouchControlsView extends View {
         b(BTN_L1).icon = icRadio;
         b(BTN_R1).label = "FRENO\nMANO";
         b(BTN_R1).icon = icHandbrake;
+
+        // Drive-by (L2/R2 -- CPad::GetLookLeft()/GetLookRight(), read
+        // straight off LeftShoulder2/RightShoulder2). These were never
+        // placed in the vehicle context at all, so there was no way to
+        // shoot out either side while driving. Flanking L1/R1, same
+        // shGap-style spacing layoutOnFoot() uses for its L1/L2/R1/R2 row.
+        float shGap = shR * 2.5f;
+        placeCircle(BTN_L2, leftStick.center.x - shGap * 1.5f, rowY, shR);
+        placeCircle(BTN_R2, leftStick.center.x + shGap * 1.5f, rowY, shR);
+        b(BTN_L2).label = "DISPARAR\nIZQ.";
+        b(BTN_R2).label = "DISPARAR\nDER.";
 
         placeCircle(BTN_L3, leftStick.center.x, rowY - shR * 2.2f, shR);
         b(BTN_L3).label = "BOCINA";

@@ -34,8 +34,13 @@ import java.io.File;
  */
 public class GameActivity extends SDLActivity {
 
-    /** Nombre de la carpeta con los archivos del juego, en la raíz del almacenamiento interno. */
-    public static final String GAME_FOLDER_NAME = "reVC";
+    /**
+     * Nombre de la carpeta con los archivos del juego, en la raíz del almacenamiento
+     * interno. Viene de BuildConfig (ver productFlavors en build.gradle) para que
+     * cada edición (standard, longnight, ...) use su propia carpeta sin tocar la
+     * de las demás -- son apps instaladas por separado (applicationId distinto).
+     */
+    public static final String GAME_FOLDER_NAME = BuildConfig.GAME_FOLDER_NAME;
 
     private static final int REQUEST_LEGACY_STORAGE_PERMISSION = 1001;
 
@@ -45,6 +50,19 @@ public class GameActivity extends SDLActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        // Android exige llamar a super.onCreate() siempre, sin importar qué
+        // rama tomemos después (si no, ActivityThread tira
+        // SuperNotCalledException y la app crashea antes de mostrar nada).
+        // SDLActivity.onCreate() carga las libs nativas y prepara la
+        // superficie, pero el hilo nativo (SDLThread, donde arranca
+        // realmente el motor) no se lanza ahí -- se lanza recién en
+        // handleNativeState() cuando la superficie está lista Y onResume()
+        // ya se llamó. Por eso, si falta el permiso, alcanza con hacer
+        // finish() antes de que la activity llegue a onResume(): la
+        // superficie nunca se vuelve válida y el motor nunca llega a
+        // intentar leer archivos que no puede.
+        super.onCreate(savedInstanceState);
+
         File gameDir = getGameDir();
         if (!gameDir.exists()) {
             gameDir.mkdirs();
@@ -52,13 +70,10 @@ public class GameActivity extends SDLActivity {
 
         if (!hasFullStorageAccess()) {
             requestFullStorageAccess();
-            // Frenamos acá: el motor nativo no debe arrancar sin poder leer
-            // los archivos del juego. El usuario reabre la app luego de
-            // conceder el permiso.
+            // El usuario reabre la app luego de conceder el permiso.
+            finish();
             return;
         }
-
-        super.onCreate(savedInstanceState);
 
         // Draw the game (and our touch controls) behind the camera cutout
         // consistently in landscape, instead of the system letterboxing
