@@ -19,6 +19,10 @@ import androidx.core.content.ContextCompat;
 import org.libsdl.app.SDLActivity;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 
 /**
  * Actividad principal del juego.
@@ -75,6 +79,8 @@ public class GameActivity extends SDLActivity {
             return;
         }
 
+        ensureGameControllerDb(gameDir);
+
         // Draw the game (and our touch controls) behind the camera cutout
         // consistently in landscape, instead of the system letterboxing
         // around it -- our TouchControlsView reads the actual safe-area
@@ -105,6 +111,32 @@ public class GameActivity extends SDLActivity {
         // case-sensitive y System.loadLibrary("revc") jamás encontraría
         // "libreVC.so".
         return new String[]{"SDL2", "openal", "mpg123", "reVC"};
+    }
+
+    /**
+     * gamecontrollerdb.txt es la base de mapeos de SDL2 para reconocer
+     * mandos físicos (sobre todo Bluetooth genéricos que Android no
+     * identifica como "GameController" de por sí -- sin esta base, SDL2 no
+     * sabe qué botón físico corresponde a cada botón lógico, D-Pad
+     * incluido). No es contenido del juego -- es la base de datos
+     * open-source de SDL (https://github.com/mdqinc/SDL_GameControllerDB,
+     * licencia MIT), así que la empaquetamos en la app y la copiamos sola
+     * a la carpeta del juego si todavía no está, en vez de depender de que
+     * el usuario la traiga junto con sus propios archivos.
+     */
+    private void ensureGameControllerDb(File gameDir) {
+        File dst = new File(gameDir, "gamecontrollerdb.txt");
+        if (dst.exists()) return;
+        try (InputStream in = getAssets().open("gamecontrollerdb.txt");
+             OutputStream out = new FileOutputStream(dst)) {
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+        } catch (IOException e) {
+            // No crítico: sin esto, algunos mandos genéricos no se
+            // reconocen, pero el juego sigue funcionando con los que sí
+            // (y con los controles táctiles) igual.
+        }
     }
 
     private boolean hasFullStorageAccess() {
