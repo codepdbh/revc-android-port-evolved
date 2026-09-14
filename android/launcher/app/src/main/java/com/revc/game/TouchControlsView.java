@@ -142,6 +142,7 @@ public class TouchControlsView extends View {
             new Button(BTN_SELECT, "SELECT"),
             new Button(BTN_START, "START"),
             new Button(BTN_L3, "L3"),
+            new Button(BTN_R3, "R3"),
             new Button(BTN_DPAD_UP, "↑"),
             new Button(BTN_DPAD_DOWN, "↓"),
             new Button(BTN_DPAD_LEFT, "←"),
@@ -525,6 +526,16 @@ public class TouchControlsView extends View {
         // centered above the L1/L2/R1/R2 row.
         placeCircle(BTN_L3, leftStick.center.x, rowY - shR * 2.2f, shR);
         b(BTN_L3).label = "AGACHAR";
+
+        // Look behind (R3 -- CPad::GetLookBehindForPed() reads RightShock,
+        // the right stick click). BTN_R3 was never placed in ANY context at
+        // all -- not just missing here, genuinely unreachable by touch.
+        // Mods that read a raw pad button via IS_BUTTON_PRESSED/
+        // GET_PAD_STATE (button id 19 = RightShock, see
+        // CRunningScript::GetPadState) for their own custom prompts --
+        // e.g. a yes/no choice -- would be just as stuck.
+        placeCircle(BTN_R3, faceCx, faceCy - spread - btnR * 1.9f, shR);
+        b(BTN_R3).label = "MIRAR\nATRÁS";
 
         // Select (camera view), top area but clear of the radar (top-left,
         // see RADAR_LEFT/TOP/WIDTH/HEIGHT in Radar.h -- roughly the left 21%
