@@ -617,6 +617,16 @@ public class TouchControlsView extends View {
         b(BTN_L3).label = "BOCINA";
         b(BTN_L3).icon = icHorn;
 
+        // Sub-missions (R3 -- also CPad::GetLookBehindForPed()'s button on
+        // foot, but in a vehicle this same physical button is what
+        // CONTROLLER_BUTTONS binds to TOGGLE_SUBMISSIONS: entering a
+        // Police/Ambulance/Firetruck/Taxi and pressing R3 starts the
+        // Vigilante/Paramedic/Firefighter/Taxi Driver side missions
+        // (needed for 100%). Was only ever placed on foot, never here, so
+        // there was no way to start any of them by touch.
+        placeCircle(BTN_R3, faceCx, faceCy - btnR * 1.6f - shR * 2.2f, shR);
+        b(BTN_R3).label = "MISIÓN\nEXTRA";
+
         float camR = baseRadius * 0.32f;
         float camCx = Math.max(areaLeft + margin + camR, areaLeft + (areaRight - areaLeft) * 0.24f);
         placeCircle(BTN_SELECT, camCx, areaTop + margin + camR, camR);
