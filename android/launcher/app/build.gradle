@@ -11,8 +11,8 @@ android {
         applicationId "com.revc.game"
         minSdk 24
         targetSdk 35
-        versionCode 7
-        versionName "1.0.6"
+        versionCode 8
+        versionName "1.0.7"
 
         ndkVersion '27.2.12479018'
 
@@ -21,6 +21,12 @@ android {
         ndk {
             abiFilters "armeabi-v7a", "arm64-v8a"
         }
+
+        // This repo only ever builds the standard (unmodified) edition --
+        // the Long Night edition, its own separate app, lives in
+        // codepdbh/revc-long-night-experimental-port. TouchControlsView.java
+        // is shared source between the two, gated on this flag.
+        buildConfigField "boolean", "IS_LONG_NIGHT_EDITION", "false"
     }
 
     buildTypes {

@@ -527,6 +527,19 @@ public class TouchControlsView extends View {
         placeCircle(BTN_L3, leftStick.center.x, rowY - shR * 2.2f, shR);
         b(BTN_L3).label = "AGACHAR";
 
+        // D-Pad Left/Right, flanking L3 -- Long Night edition only. Its NPC
+        // dialogue prompts (e.g. talking to the SWAT character) read a
+        // keyboard-bound yes/no choice that the PS2 build auto-detects as
+        // D-Pad Left/Right (confirmed by a modder who works on Long
+        // Night's scripting) -- left = yes, right = no. Not a vanilla VC
+        // mechanic, so this stays out of the standard edition's layout.
+        if (BuildConfig.IS_LONG_NIGHT_EDITION) {
+            placeCircle(BTN_DPAD_LEFT, leftStick.center.x - shR * 2.6f, rowY - shR * 2.2f, shR);
+            placeCircle(BTN_DPAD_RIGHT, leftStick.center.x + shR * 2.6f, rowY - shR * 2.2f, shR);
+            b(BTN_DPAD_LEFT).label = "SÍ";
+            b(BTN_DPAD_RIGHT).label = "NO";
+        }
+
         // Look behind (R3 -- CPad::GetLookBehindForPed() reads RightShock,
         // the right stick click). BTN_R3 was never placed in ANY context at
         // all -- not just missing here, genuinely unreachable by touch.
