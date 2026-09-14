@@ -533,11 +533,13 @@ public class TouchControlsView extends View {
         // D-Pad Left/Right (confirmed by a modder who works on Long
         // Night's scripting) -- left = yes, right = no. Not a vanilla VC
         // mechanic, so this stays out of the standard edition's layout.
+        // Arrows instead of "SÍ"/"NO" text so it reads the same regardless
+        // of the player's language.
         if (BuildConfig.IS_LONG_NIGHT_EDITION) {
             placeCircle(BTN_DPAD_LEFT, leftStick.center.x - shR * 2.6f, rowY - shR * 2.2f, shR);
             placeCircle(BTN_DPAD_RIGHT, leftStick.center.x + shR * 2.6f, rowY - shR * 2.2f, shR);
-            b(BTN_DPAD_LEFT).label = "SÍ";
-            b(BTN_DPAD_RIGHT).label = "NO";
+            b(BTN_DPAD_LEFT).label = "←";
+            b(BTN_DPAD_RIGHT).label = "→";
         }
 
         // Look behind (R3 -- CPad::GetLookBehindForPed() reads RightShock,
