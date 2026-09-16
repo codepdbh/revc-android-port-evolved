@@ -745,7 +745,17 @@ public class TouchControlsView extends View {
             if (btn.icon != null) {
                 drawIconButton(canvas, btn);
             } else {
-                fillPaint.setAlpha(btn.pressed ? 150 : 70);
+                // No icon art exists for these (AGACHAR, MIRAR ATRÁS, MISIÓN
+                // EXTRA, the D-Pad arrows, L2/R2...), so they fall back to a
+                // plain circle+label. 70/255 alpha made that fallback read
+                // as a near-invisible ghost outline next to the fully-opaque
+                // icon buttons -- easy to miss mid-gameplay, which is what
+                // was actually behind reports of "no está el botón de R3"
+                // (it was there, just impossible to see). Bumped closer to
+                // the icon buttons' visual weight; drawIconButton()'s own
+                // pressed-state circle uses 90, so 130/190 keeps the same
+                // roughly 1.4x jump on press.
+                fillPaint.setAlpha(btn.pressed ? 190 : 130);
                 if (btn.roundedRect) {
                     canvas.drawRoundRect(btn.hitRect, 14f, 14f, fillPaint);
                     canvas.drawRoundRect(btn.hitRect, 14f, 14f, strokePaint);

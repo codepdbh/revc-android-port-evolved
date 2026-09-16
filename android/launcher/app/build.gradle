@@ -11,8 +11,8 @@ android {
         applicationId "com.revc.game"
         minSdk 24
         targetSdk 35
-        versionCode 11
-        versionName "1.0.10"
+        versionCode 12
+        versionName "1.0.11"
 
         ndkVersion '27.2.12479018'
 
@@ -67,6 +67,20 @@ android {
     packagingOptions {
         jniLibs.excludes += ['META-INF/*']
         resources.excludes += ['META-INF/*']
+
+        // Vendored prebuilt libs (SDL2, mpg123 -- see vendor/sdl2, vendor/mpg123)
+        // ship with 4KB-aligned ELF LOAD segments, not the 16KB AGP's default
+        // packaging (targetSdk 35+: libs stored uncompressed and mmap()'d
+        // straight out of the APK zip) expects on a page-size-strict device.
+        // That mismatch is the likely cause of a real (if intermittent) crash
+        // seen on a 16KB-page Android 16 device -- first cold launch (APK's
+        // zip freshly mmap'd) failed, a relaunch (already extracted/cached by
+        // then) didn't. Forcing legacy packaging extracts the .so files to
+        // the app's normal filesystem data dir at install time instead, where
+        // they're loaded like any other file (no zip-entry alignment
+        // requirement) -- sidesteps the whole class of bug without needing to
+        // rebuild or hand-patch the vendored binaries.
+        jniLibs.useLegacyPackaging = true
     }
 
     compileOptions {
