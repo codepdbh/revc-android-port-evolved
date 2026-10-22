@@ -1,0 +1,25 @@
+{
+  "$schema": "https://recomp.fyi/schema/v1.json",
+  "game": "Grand Theft Auto: Vice City",
+  "system": "PC (Windows)",
+  "type": "port",
+  "project": "reVC Android Evolved",
+  "status": "released",
+  "targets": [
+    "Android"
+  ],
+  "approach": "Native Android adaptation of the reverse-engineered reVC engine using librw.",
+  "maintainers": [
+    {
+      "name": "codepdbh",
+      "link": "https://github.com/codepdbh"
+    }
+  ],
+  "notes": "Android source port based on the community reverse-engineered engine; upstream authors retain credit. Public APKs with touch controls. Requires original PC game data.",
+  "links": [
+    {
+      "label": "Upstream project",
+      "url": "https://github.com/mrxenginner/reVC"
+    }
+  ]
+}
